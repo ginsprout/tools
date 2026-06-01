@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ginsprout ツール棚</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f2e9; --paper:#fffdf8; --ink:#2c372e; --ink-soft:#5c6a5d; --line:#e3ddcd;
+    --sprout:#5b8a5a; --sprout-deep:#3f6a44; --sprout-soft:#e7efe1; --sprout-line:#cfe0c6;
+    --clay:#b96b3e; --clay-deep:#9a5128; --clay-soft:#f6e4d6; --clay-line:#ecccb2;
+    --shadow:0 14px 40px -22px rgba(44,55,46,.45); --radius:20px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:"Zen Kaku Gothic New",sans-serif;color:var(--ink);background:var(--bg);
+    background-image:
+      radial-gradient(760px 480px at 10% -10%, rgba(91,138,90,.10), transparent 60%),
+      radial-gradient(700px 520px at 108% 6%, rgba(185,107,62,.09), transparent 60%);
+    line-height:1.75;letter-spacing:.01em;min-height:100vh;padding:40px 18px 80px;
+  }
+  .wrap{max-width:840px;margin:0 auto;}
+
+  header{text-align:center;margin-bottom:30px;}
+  .leaf{display:inline-flex;align-items:center;justify-content:center;width:60px;height:60px;
+    border-radius:50%;background:var(--sprout-soft);border:1.5px solid var(--sprout-line);
+    margin-bottom:14px;font-size:28px;box-shadow:0 8px 20px -12px rgba(63,106,68,.5);}
+  h1{font-family:"Zen Maru Gothic",sans-serif;font-weight:700;
+    font-size:clamp(26px,5vw,34px);letter-spacing:.05em;}
+  .sub{font-size:14px;color:var(--ink-soft);margin-top:10px;}
+
+  /* legend */
+  .legend{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin:22px 0 30px;
+    font-size:12.5px;color:var(--ink-soft);}
+  .legend .li{display:inline-flex;align-items:center;gap:7px;background:var(--paper);
+    border:1px solid var(--line);border-radius:999px;padding:6px 13px;}
+  .dot{width:9px;height:9px;border-radius:50%;}
+  .dot.s{background:var(--sprout);} .dot.a{background:var(--clay);}
+
+  /* grid */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+  @media(max-width:600px){.grid{grid-template-columns:1fr;}}
+
+  .tool{
+    background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:20px 20px 18px;display:flex;flex-direction:column;
+    text-decoration:none;color:inherit;position:relative;overflow:hidden;transition:.2s;
+  }
+  .tool::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;}
+  .tool.static::before{background:var(--sprout);}
+  .tool.ai::before{background:var(--clay);}
+  .tool:hover{transform:translateY(-3px);box-shadow:0 20px 44px -22px rgba(44,55,46,.55);}
+  .tool.nolink{cursor:default;}
+  .tool.nolink:hover{transform:none;box-shadow:var(--shadow);}
+  .tool.nolink .arr{font-size:12px;}
+
+  .tool .top{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+  .tool .ic{font-size:26px;width:46px;height:46px;border-radius:14px;display:flex;
+    align-items:center;justify-content:center;flex-shrink:0;}
+  .tool.static .ic{background:var(--sprout-soft);}
+  .tool.ai .ic{background:var(--clay-soft);}
+  .tool h3{font-family:"Zen Maru Gothic",sans-serif;font-weight:700;font-size:16.5px;
+    line-height:1.4;}
+
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
+    letter-spacing:.04em;padding:4px 10px;border-radius:999px;align-self:flex-start;
+    margin-bottom:10px;}
+  .badge.static{background:var(--sprout-soft);color:var(--sprout-deep);border:1px solid var(--sprout-line);}
+  .badge.ai{background:var(--clay-soft);color:var(--clay-deep);border:1px solid var(--clay-line);}
+
+  .tool p{font-size:13.5px;color:var(--ink-soft);line-height:1.7;flex-grow:1;}
+  .tool .go{margin-top:14px;font-family:"Zen Maru Gothic",sans-serif;font-weight:700;
+    font-size:13.5px;display:inline-flex;align-items:center;gap:6px;}
+  .tool.static .go{color:var(--sprout-deep);}
+  .tool.ai .go{color:var(--clay-deep);}
+  .tool .go .arr{transition:.2s;}
+  .tool:hover .go .arr{transform:translateX(4px);}
+
+  .note{background:var(--paper);border:1px dashed var(--clay-line);border-radius:14px;
+    padding:14px 16px;font-size:12.5px;color:var(--ink-soft);line-height:1.85;margin-top:24px;}
+  .note b{color:var(--clay-deep);font-family:"Zen Maru Gothic",sans-serif;}
+
+  footer{text-align:center;margin-top:30px;font-size:11.5px;color:#a7a99c;letter-spacing:.04em;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="leaf">🌱</div>
+    <h1>Ginsprout ツール棚</h1>
+    <p class="sub">じぶん用の道具箱。創作・支援・仕事のためのツールをここにまとめています。</p>
+  </header>
+
+  <div class="legend">
+    <span class="li"><span class="dot s"></span>すぐ使える（開けば動く）</span>
+    <span class="li"><span class="dot a"></span>Claudeで起動（AI使用）</span>
+  </div>
+
+  <div class="grid">
+
+    <!--
+      ▼ ツールの増やし方
+      下のカードを1つコピーして、href・絵文字・タイトル・説明を書き換えるだけ。
+      ・開けば動く静的ツール  → class="tool static" / badge も static
+      ・AIを使うツール        → class="tool ai"     / badge も ai
+      href は、各ツールのHTMLを同じフォルダに置く前提のファイル名です。
+      実際のファイル名に合わせて書き換えてください。
+    -->
+
+    <!-- ===== 静的ツール（開けば動く） ===== -->
+    <a class="tool static" href="notion_cleaner.html">
+      <div class="top">
+        <div class="ic">🧹</div>
+        <h3>Notionテキストクリーナー</h3>
+      </div>
+      <span class="badge static">● すぐ使える</span>
+      <p>小説テキストを各種執筆プラットフォームに貼るときの、空行やマークダウンの崩れを整えるツール。</p>
+      <span class="go">ひらく <span class="arr">→</span></span>
+    </a>
+
+    <a class="tool static" href="character-relation-map.html">
+      <div class="top">
+        <div class="ic">🕸️</div>
+        <h3>キャラクター相関図</h3>
+      </div>
+      <span class="badge static">● すぐ使える</span>
+      <p>小説の登場人物の関係をSVGで可視化。勢力ごとの色分け、HTML／PNG書き出しに対応。</p>
+      <span class="go">ひらく <span class="arr">→</span></span>
+    </a>
+
+    <!-- ===== AI組み込みツール（Claudeで起動） ===== -->
+    <a class="tool ai" href="aba-response-analyzer.html">
+      <div class="top">
+        <div class="ic">🌱</div>
+        <h3>こうどうの芽<br><span style="font-size:12px;font-weight:500;color:var(--ink-soft)">ABA対応みたて</span></h3>
+      </div>
+      <span class="badge ai">◆ Claudeで起動</span>
+      <p>子どもの困りごとを入れると、好ましい対応と誤った対応の予測をABAで対比。事例集づくりの素材出しに。</p>
+      <span class="go">コードを開く <span class="arr">→</span></span>
+    </a>
+
+    <a class="tool ai" href="hattatsu-idea-generator.html">
+      <div class="top">
+        <div class="ic">🔍</div>
+        <h3>困りごと解析ツール</h3>
+      </div>
+      <span class="badge ai">◆ Claudeで起動</span>
+      <p>困りごとから支援アイデアを生成。発達支援×デザインのコンテンツの種出しに。</p>
+      <span class="go">コードを開く <span class="arr">→</span></span>
+    </a>
+
+    <a class="tool ai" href="idea-twist.html">
+      <div class="top">
+        <div class="ic">✨</div>
+        <h3>アイデア昇華ツール</h3>
+      </div>
+      <span class="badge ai">◆ Claudeで起動</span>
+      <p>ありふれたアイデアを、物語的・体験的なコンセプトへ変換する発想支援ツール。</p>
+      <span class="go">コードを開く <span class="arr">→</span></span>
+    </a>
+
+    <a class="tool ai" href="https://github.com/ginsprout/tools/blob/main/sohsi-bar.jsx" target="_blank" rel="noopener">
+      <div class="top">
+        <div class="ic">🍸</div>
+        <h3>イケメン哲学バー「SOH」</h3>
+      </div>
+      <span class="badge ai">◆ Claudeで起動</span>
+      <p>イケメンに転生した荘子バーテンダー“SOH”と、胡蝶の夢のような哲学を織り交ぜて悩み相談ができるバー体験。</p>
+      <span class="go">GitHubでコードを見る <span class="arr">↗</span></span>
+    </a>
+
+    <a class="tool ai" href="https://github.com/ginsprout/tools/blob/main/freelance-pdca.jsx" target="_blank" rel="noopener">
+      <div class="top">
+        <div class="ic">📊</div>
+        <h3>PDCAマネージャー<br><span style="font-size:12px;font-weight:500;color:var(--ink-soft)">フリーランス向け</span></h3>
+      </div>
+      <span class="badge ai">◆ Claudeで起動</span>
+      <p>Plan・Do・Check・Dashboardの4タブで、デザイン／小説／発達支援などの軸ごとに計画と進捗を管理。AIが振り返りコメントを生成。</p>
+      <span class="go">GitHubでコードを見る <span class="arr">↗</span></span>
+    </a>
+
+  </div>
+
+  <div class="note">
+    <b>◆ Claudeで起動 のツールについて：</b>
+    AIを使うツールは、ページに置いただけでは分析が動きません（認証の肩代わりがなくなるため）。
+    カードの「GitHubでコードを見る」からコードを開き、それをClaudeに貼って「これを動かして」と頼むと、その場で起動できます。
+    ここでは“コードの保管庫”として置いておき、実際に動かすのはClaudeの中で、という役割分担です。
+  </div>
+
+  <footer>🌱 ginsprout — private tools</footer>
+</div>
+</body>
+</html>

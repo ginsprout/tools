@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>こうどうの芽 — ABA対応みたて</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Shippori+Mincho:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f2e9;
+    --paper:#fffdf8;
+    --ink:#2c372e;
+    --ink-soft:#5c6a5d;
+    --line:#e3ddcd;
+
+    --sprout:#5b8a5a;
+    --sprout-deep:#3f6a44;
+    --sprout-soft:#e7efe1;
+    --sprout-line:#cfe0c6;
+
+    --clay:#b96b3e;
+    --clay-deep:#9a5128;
+    --clay-soft:#f6e4d6;
+    --clay-line:#ecccb2;
+
+    --slate:#7c8597;
+    --slate-soft:#eceef1;
+
+    --shadow:0 14px 40px -20px rgba(44,55,46,.45);
+    --radius:20px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:"Zen Kaku Gothic New",sans-serif;
+    color:var(--ink);
+    background:var(--bg);
+    background-image:
+      radial-gradient(720px 480px at 12% -8%, rgba(91,138,90,.10), transparent 60%),
+      radial-gradient(680px 520px at 105% 8%, rgba(185,107,62,.10), transparent 60%);
+    line-height:1.75;
+    letter-spacing:.01em;
+    min-height:100vh;
+    padding:32px 18px 80px;
+  }
+  .wrap{max-width:760px;margin:0 auto;}
+
+  /* ---------- header ---------- */
+  header{text-align:center;margin-bottom:34px;}
+  .leaf{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:58px;height:58px;border-radius:50%;
+    background:var(--sprout-soft);border:1.5px solid var(--sprout-line);
+    margin-bottom:14px;font-size:26px;
+    box-shadow:0 8px 20px -12px rgba(63,106,68,.5);
+  }
+  h1{
+    font-family:"Zen Maru Gothic",sans-serif;font-weight:700;
+    font-size:clamp(25px,5vw,33px);letter-spacing:.04em;color:var(--ink);
+  }
+  .sub{
+    font-size:14px;color:var(--ink-soft);margin-top:10px;max-width:560px;
+    margin-inline:auto;line-height:1.9;
+  }
+  .sub b{color:var(--sprout-deep);font-weight:700;}
+
+  /* ---------- card / form ---------- */
+  .card{
+    background:var(--paper);border:1px solid var(--line);
+    border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:26px 24px;
+  }
+  .field{margin-bottom:18px;}
+  .field:last-of-type{margin-bottom:22px;}
+  label{
+    display:block;font-family:"Zen Maru Gothic",sans-serif;font-weight:500;
+    font-size:14.5px;margin-bottom:7px;color:var(--ink);
+  }
+  label .req{color:var(--clay);font-size:11px;font-weight:700;margin-left:6px;
+    vertical-align:1px;letter-spacing:.08em;}
+  label .opt{color:var(--slate);font-size:11px;font-weight:500;margin-left:6px;
+    vertical-align:1px;letter-spacing:.06em;}
+  .hint{font-size:12px;color:var(--ink-soft);margin:-2px 0 7px;}
+  textarea,input[type=text]{
+    width:100%;font-family:inherit;font-size:15px;color:var(--ink);
+    background:#fbf9f2;border:1.5px solid var(--line);border-radius:13px;
+    padding:13px 14px;resize:vertical;line-height:1.7;transition:.18s;
+  }
+  textarea{min-height:84px;}
+  textarea:focus,input[type=text]:focus{
+    outline:none;border-color:var(--sprout);background:#fff;
+    box-shadow:0 0 0 4px rgba(91,138,90,.13);
+  }
+  textarea::placeholder,input::placeholder{color:#aeb4a8;}
+
+  button.run{
+    width:100%;font-family:"Zen Maru Gothic",sans-serif;font-weight:700;
+    font-size:16px;letter-spacing:.06em;color:#fff;cursor:pointer;
+    background:linear-gradient(135deg,var(--sprout) 0%,var(--sprout-deep) 100%);
+    border:none;border-radius:14px;padding:15px;
+    box-shadow:0 12px 24px -12px rgba(63,106,68,.7);transition:.18s;
+  }
+  button.run:hover{transform:translateY(-2px);box-shadow:0 16px 28px -12px rgba(63,106,68,.8);}
+  button.run:active{transform:translateY(0);}
+  button.run:disabled{opacity:.6;cursor:wait;transform:none;}
+
+  /* ---------- loading ---------- */
+  .loading{display:none;text-align:center;padding:34px 10px;color:var(--ink-soft);}
+  .loading.on{display:block;}
+  .dots{display:inline-flex;gap:7px;margin-bottom:14px;}
+  .dots span{width:11px;height:11px;border-radius:50%;background:var(--sprout);
+    animation:bob 1.1s infinite ease-in-out;}
+  .dots span:nth-child(2){animation-delay:.16s;background:var(--sprout-deep);}
+  .dots span:nth-child(3){animation-delay:.32s;background:var(--clay);}
+  @keyframes bob{0%,80%,100%{transform:translateY(0);opacity:.5;}40%{transform:translateY(-9px);opacity:1;}}
+
+  .err{display:none;margin-top:18px;background:var(--clay-soft);
+    border:1px solid var(--clay-line);border-radius:13px;padding:14px 16px;
+    color:var(--clay-deep);font-size:14px;}
+  .err.on{display:block;}
+
+  /* ---------- results ---------- */
+  #out{margin-top:28px;}
+  .reveal{opacity:0;transform:translateY(14px);animation:rise .55s forwards;}
+  @keyframes rise{to{opacity:1;transform:translateY(0);}}
+
+  .block{margin-bottom:18px;}
+  .block-title{
+    font-family:"Zen Maru Gothic",sans-serif;font-weight:700;font-size:15px;
+    display:flex;align-items:center;gap:8px;margin-bottom:11px;color:var(--ink);
+  }
+  .block-title .ic{font-size:18px;}
+
+  /* ABC strip */
+  .abc{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
+  .abc .cell{
+    background:var(--slate-soft);border:1px solid #dde1e6;border-radius:13px;
+    padding:13px 13px 14px;position:relative;
+  }
+  .abc .tag{font-family:"Zen Maru Gothic",sans-serif;font-weight:700;
+    font-size:11px;letter-spacing:.1em;color:var(--slate);display:block;margin-bottom:5px;}
+  .abc .tag small{display:block;font-weight:500;font-size:10px;letter-spacing:.02em;opacity:.85;}
+  .abc .txt{font-size:13px;line-height:1.65;color:var(--ink);}
+  @media(max-width:560px){.abc{grid-template-columns:1fr;}}
+
+  /* function chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{
+    font-size:13px;font-weight:500;padding:7px 13px;border-radius:999px;
+    background:var(--sprout-soft);border:1px solid var(--sprout-line);color:var(--sprout-deep);
+    display:inline-flex;align-items:center;gap:7px;
+  }
+  .chip.primary{background:var(--sprout-deep);border-color:var(--sprout-deep);color:#fff;}
+  .chip .lk{font-size:11px;opacity:.85;font-weight:700;}
+  .fn-reason{font-size:13px;color:var(--ink-soft);margin-top:9px;line-height:1.7;}
+
+  /* good / bad cards */
+  .rcard{border-radius:16px;padding:18px 18px 19px;border:1.5px solid;}
+  .rcard.good{background:var(--sprout-soft);border-color:var(--sprout-line);}
+  .rcard.bad{background:var(--clay-soft);border-color:var(--clay-line);}
+  .rcard .head{font-family:"Zen Maru Gothic",sans-serif;font-weight:700;font-size:15.5px;
+    display:flex;align-items:center;gap:9px;margin-bottom:12px;}
+  .rcard.good .head{color:var(--sprout-deep);}
+  .rcard.bad .head{color:var(--clay-deep);}
+  .rcard .head .badge{font-size:11px;font-weight:700;letter-spacing:.08em;padding:3px 9px;
+    border-radius:999px;color:#fff;}
+  .rcard.good .badge{background:var(--sprout);}
+  .rcard.bad .badge{background:var(--clay);}
+
+  .rcard .label{font-size:12px;font-weight:700;letter-spacing:.05em;margin:4px 0 7px;
+    text-transform:none;opacity:.9;}
+  .rcard.good .label{color:var(--sprout-deep);}
+  .rcard.bad .label{color:var(--clay-deep);}
+  .rcard ul{list-style:none;margin:0 0 14px;}
+  .rcard li{font-size:14px;line-height:1.7;padding-left:22px;position:relative;margin-bottom:6px;}
+  .rcard.good li::before{content:"✓";position:absolute;left:0;color:var(--sprout);font-weight:700;}
+  .rcard.bad li::before{content:"✕";position:absolute;left:0;color:var(--clay);font-weight:700;}
+
+  .learn{border-radius:11px;padding:12px 14px;font-size:13.5px;line-height:1.75;}
+  .rcard.good .learn{background:rgba(255,255,255,.65);border:1px dashed var(--sprout-line);color:var(--sprout-deep);}
+  .rcard.bad .learn{background:rgba(255,255,255,.6);border:1px dashed var(--clay-line);color:var(--clay-deep);}
+  .learn b{font-family:"Zen Maru Gothic",sans-serif;display:block;font-size:12px;
+    letter-spacing:.04em;margin-bottom:3px;}
+
+  .grid2{display:grid;grid-template-columns:1fr;gap:14px;}
+
+  .tip{background:#fff;border:1px solid var(--line);border-left:4px solid var(--sprout);
+    border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.8;}
+  .tip b{font-family:"Zen Maru Gothic",sans-serif;color:var(--sprout-deep);display:block;
+    font-size:13px;margin-bottom:4px;}
+
+  .caution{font-size:12px;color:var(--ink-soft);line-height:1.8;
+    background:#fbf9f2;border:1px dashed var(--line);border-radius:11px;padding:12px 14px;
+    margin-top:16px;}
+  .caution b{color:var(--clay-deep);}
+
+  footer{text-align:center;margin-top:32px;font-size:11.5px;color:#a7a99c;
+    letter-spacing:.04em;line-height:1.9;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="leaf">🌱</div>
+    <h1>こうどうの芽</h1>
+    <p class="sub">
+      子どもの困りごとを、応用行動分析（ABA）の<b>三項随伴性</b>と<b>行動の機能</b>から読み解きます。<br>
+      「好ましい対応 → 育つ行動」と「やりがちな対応 → 育ってしまう困りごと」を対で見える化します。
+    </p>
+  </header>
+
+  <div class="card">
+    <div class="field">
+      <label for="i-behavior">子どもの困りごと・気になる行動<span class="req">必須</span></label>
+      <p class="hint">どんな行動が、どんなふうに起きるかを具体的に。</p>
+      <textarea id="i-behavior" placeholder="例：思いどおりにならないと、床に寝転がって大声で泣き叫ぶ。なかなかおさまらない。"></textarea>
+    </div>
+
+    <div class="field">
+      <label for="i-context">起きやすい場面・直前のようす<span class="opt">任意・機能の見立てに役立ちます</span></label>
+      <p class="hint">いつ・どこで・直前に何があったか。そのあと大人はどう対応しがちか。</p>
+      <textarea id="i-context" placeholder="例：スーパーでお菓子を「買って」と言われ「ダメ」と答えた直後に多い。結局根負けして買ってしまうことがある。"></textarea>
+    </div>
+
+    <div class="field">
+      <label for="i-profile">年齢・特性など<span class="opt">任意</span></label>
+      <input type="text" id="i-profile" placeholder="例：5歳・言葉でのやりとりはできるが切り替えが苦手">
+    </div>
+
+    <button class="run" id="run">この行動をみたてる</button>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="dots"><span></span><span></span><span></span></div>
+    <div>行動の機能をみたてています…</div>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div id="out"></div>
+
+  <footer>
+    🌱 ginsprout — このツールはAIによる分析であり、内容が正確とは限りません。<br>
+    あくまで“見立てのヒント”として参考にとどめ、正確な判断や対応は専門家にご相談ください。
+  </footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const runBtn = $("#run"), loading = $("#loading"), errBox = $("#err"), out = $("#out");
+
+const SYSTEM = `あなたは応用行動分析（ABA）と発達支援に精通した専門家です。保護者・支援者から子どもの「困りごと（気になる行動）」が入力されます。
+
+次の枠組みで分析してください：
+- 三項随伴性（ABC）：先行事象(A) → 行動(B) → 結果事象(C)
+- 行動の機能（次の4つから見立てる）：「注目の獲得」「要求・物や活動の獲得」「逃避・回避」「感覚・自己刺激」
+- 強化の原理：行動の直後に本人にとって望ましい結果が伴うと、その行動は強化される（増える）。
+- 重要：何が「よい刺激（強化子）」になるかは行動の機能によって変わる。同じ対応でも機能が違えば、適切にも誤学習の元にもなる。
+
+出力の考え方：
+- good_response：機能に沿って望ましい行動を伸ばす対応。適切な代替行動（例：言葉で要求する・少し待つ等）を強化し、問題行動には強化を与えない方向。
+- bad_response：大人が善意でやりがちだが、結果として問題行動そのものを強化してしまう対応。なぜそれが「報酬」になってしまうかが伝わるように。
+- predicted_learning / predicted_mislearning：強化の原理に基づき「子どもが何を学習するか」を、行動が増減する形で具体的に。
+
+必ず日本語で、下記JSONのみを出力してください。前置き・後置き・マークダウン・コードフェンスは一切禁止。各項目は簡潔に（actionsは各40字以内・2〜3個、学習効果は60字程度）。
+
+{
+ "behavior_summary":"行動の簡潔な言い換え（30字以内）",
+ "abc":{"antecedent":"先行事象の例","behavior":"行動","consequence":"よくある結果事象"},
+ "functions":[{"name":"機能名","likelihood":"高い/中/低","reason":"そう見立てる理由（40字以内）"}],
+ "primary_function":"最も可能性の高い機能名",
+ "good_response":{"actions":["対応1","対応2"],"predicted_learning":"予測される学習効果"},
+ "bad_response":{"actions":["対応1","対応2"],"predicted_mislearning":"予測される誤学習"},
+ "tip":"ワンポイント（70字以内）"
+}`;
+
+function esc(s){return String(s==null?"":s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+async function analyze(){
+  const behavior = $("#i-behavior").value.trim();
+  const context  = $("#i-context").value.trim();
+  const profile  = $("#i-profile").value.trim();
+
+  if(!behavior){ showErr("「子どもの困りごと・気になる行動」を入力してください。"); return; }
+
+  errBox.classList.remove("on"); out.innerHTML=""; loading.classList.add("on");
+  runBtn.disabled=true;
+
+  let userMsg = `【困りごと・気になる行動】\n${behavior}`;
+  if(context) userMsg += `\n\n【起きやすい場面・直前のようす・大人の対応】\n${context}`;
+  if(profile) userMsg += `\n\n【年齢・特性など】\n${profile}`;
+
+  try{
+    const res = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:1000,
+        system:SYSTEM,
+        messages:[{role:"user",content:userMsg}]
+      })
+    });
+    const data = await res.json();
+    let text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
+    text = text.replace(/```json|```/g,"").trim();
+    const m = text.match(/\{[\s\S]*\}/);
+    if(m) text = m[0];
+    const r = JSON.parse(text);
+    render(r);
+  }catch(e){
+    showErr("分析に失敗しました。少し時間をおいて、もう一度お試しください。");
+    console.error(e);
+  }finally{
+    loading.classList.remove("on");
+    runBtn.disabled=false;
+  }
+}
+
+function render(r){
+  const fns = (r.functions||[]).map(f=>{
+    const isP = f.name === r.primary_function;
+    return `<span class="chip ${isP?'primary':''}">${esc(f.name)}<span class="lk">${esc(f.likelihood||'')}</span></span>`;
+  }).join("");
+  const primaryReason = (r.functions||[]).find(f=>f.name===r.primary_function);
+
+  const goodActions = (r.good_response?.actions||[]).map(a=>`<li>${esc(a)}</li>`).join("");
+  const badActions  = (r.bad_response?.actions||[]).map(a=>`<li>${esc(a)}</li>`).join("");
+
+  let d=0; const dly=()=>`style="animation-delay:${(d++*0.09).toFixed(2)}s"`;
+
+  out.innerHTML = `
+    <div class="block reveal" ${dly()}>
+      <div class="block-title"><span class="ic">📝</span>みている行動</div>
+      <div class="tip"><b>${esc(r.behavior_summary||'')}</b></div>
+    </div>
+
+    <div class="block reveal" ${dly()}>
+      <div class="block-title"><span class="ic">🔗</span>三項随伴性（ABC）</div>
+      <div class="abc">
+        <div class="cell"><span class="tag">A<small>先行事象</small></span><div class="txt">${esc(r.abc?.antecedent||'')}</div></div>
+        <div class="cell"><span class="tag">B<small>行動</small></span><div class="txt">${esc(r.abc?.behavior||'')}</div></div>
+        <div class="cell"><span class="tag">C<small>結果事象</small></span><div class="txt">${esc(r.abc?.consequence||'')}</div></div>
+      </div>
+    </div>
+
+    <div class="block reveal" ${dly()}>
+      <div class="block-title"><span class="ic">🎯</span>推測される行動の機能</div>
+      <div class="chips">${fns}</div>
+      ${primaryReason?`<div class="fn-reason">▶ ${esc(primaryReason.reason||'')}</div>`:''}
+    </div>
+
+    <div class="block reveal" ${dly()}>
+      <div class="grid2">
+        <div class="rcard good">
+          <div class="head"><span class="badge">GOOD</span>好ましい対応</div>
+          <div class="label">こう対応すると…</div>
+          <ul>${goodActions}</ul>
+          <div class="learn"><b>🌱 予測される学習効果</b>${esc(r.good_response?.predicted_learning||'')}</div>
+        </div>
+        <div class="rcard bad">
+          <div class="head"><span class="badge">CARE</span>やりがちな誤った対応</div>
+          <div class="label">こう対応してしまうと…</div>
+          <ul>${badActions}</ul>
+          <div class="learn"><b>⚠ 予測される誤学習</b>${esc(r.bad_response?.predicted_mislearning||'')}</div>
+        </div>
+      </div>
+    </div>
+
+    ${r.tip?`<div class="block reveal" ${dly()}>
+      <div class="tip"><b>💡 ワンポイント</b>${esc(r.tip)}</div>
+    </div>`:''}
+
+    <div class="caution reveal" ${dly()}>
+      <b>ご注意：</b>この分析はAIが生成した“見立ての一例”であり、内容が正確であるとは限りません。実際の行動には複数の機能が重なることも多く、同じ対応が常に正解とは限りません。あくまで参考にとどめ、お子さんの反応を観察しながら調整し、正確な判断や具体的な対応は専門家にご相談ください。
+    </div>
+  `;
+  out.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+function showErr(msg){ errBox.textContent=msg; errBox.classList.add("on"); }
+
+runBtn.addEventListener("click", analyze);
+</script>
+</body>
+</html>
