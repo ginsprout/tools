@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ginsprout Idea Vault</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #F7F5F0; font-family: 'Hiragino Mincho ProN', 'Yu Mincho', Georgia, serif; color: #2C2C2C; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const STORAGE_KEY = "ginsprout-idea-vault";
+    const CATEGORIES = ["発達支援", "教材・コンテンツ", "小説・創作", "アプリ開発", "フリーランス", "その他"];
+    const STATUSES = [
+      { label: "種まき", color: "#8B9E6E", bg: "#F0F4EB" },
+      { label: "温め中", color: "#C4956A", bg: "#FAF2EA" },
+      { label: "進行中", color: "#5B87A8", bg: "#EAF2F8" },
+      { label: "完成",   color: "#7A7A7A", bg: "#F0F0F0" },
+    ];
+
+    const defaultIdeas = [
+      {
+        id: "demo-1",
+        title: "怒ったら負けカードバトル",
+        category: "発達支援",
+        status: "種まき",
+        memo: "アンガーマネジメントをゲーム化。発達障害の子と保護者が一緒に楽しめる教材コンセプト。怒りのコストをゲーム内で可視化。資格取得後＋教材数冊後に本格展開予定。",
+        tags: ["アンガーマネジメント", "カードゲーム", "特別支援"],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+
+    function generateId() {
+      return "idea-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+    }
+    function formatDate(iso) {
+      const d = new Date(iso);
+      return d.toLocaleDateString("ja-JP", { year: "numeric", month: "short", day: "numeric" });
+    }
+    function getStatus(label) {
+      return STATUSES.find(s => s.label === label) || STATUSES[0];
+    }
+
+    function App() {
+      const [ideas, setIdeas] = React.useState(() => {
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          return stored ? JSON.parse(stored) : defaultIdeas;
+        } catch { return defaultIdeas; }
+      });
+      const [view, setView] = React.useState("list");
+      const [selected, setSelected] = React.useState(null);
+      const [editForm, setEditForm] = React.useState(null);
+      const [searchQuery, setSearchQuery] = React.useState("");
+      const [filterCategory, setFilterCategory] = React.useState("すべて");
+      const [filterStatus, setFilterStatus] = React.useState("すべて");
+      const [tagInput, setTagInput] = React.useState("");
+      const [exportMsg, setExportMsg] = React.useState("");
+
+      React.useEffect(() => {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(ideas)); } catch {}
+      }, [ideas]);
+
+      const filtered = React.useMemo(() => {
+        return ideas.filter(idea => {
+          const q = searchQuery.toLowerCase();
+          const matchSearch = !q || idea.title.toLowerCase().includes(q) || (idea.memo || "").toLowerCase().includes(q) || (idea.tags || []).some(t => t.toLowerCase().includes(q));
+          const matchCat = filterCategory === "すべて" || idea.category === filterCategory;
+          const matchSt = filterStatus === "すべて" || idea.status === filterStatus;
+          return matchSearch && matchCat && matchSt;
+        }).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      }, [ideas, searchQuery, filterCategory, filterStatus]);
+
+      function openNew() {
+        setEditForm({ id: generateId(), title: "", category: CATEGORIES[0], status: "種まき", memo: "", tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+        setTagInput("");
+        setView("new");
+      }
+      function openEdit(idea) {
+        setEditForm({ ...idea, tags: [...(idea.tags || [])] });
+        setTagInput("");
+        setView("edit");
+      }
+      function saveIdea() {
+        const updated = { ...editForm, updatedAt: new Date().toISOString() };
+        if (view === "new") {
+          setIdeas(prev => [updated, ...prev]);
+          setView("list");
+        } else {
+          setIdeas(prev => prev.map(i => i.id === updated.id ? updated : i));
+          setSelected(updated);
+          setView("detail");
+        }
+      }
+      function deleteIdea(id) {
+        if (!window.confirm("このネタを削除しますか？")) return;
+        setIdeas(prev => prev.filter(i => i.id !== id));
+        setView("list");
+        setSelected(null);
+      }
+      function addTag() {
+        const t = tagInput.trim();
+        if (t && !editForm.tags.includes(t)) setEditForm(f => ({ ...f, tags: [...f.tags, t] }));
+        setTagInput("");
+      }
+      function removeTag(t) {
+        setEditForm(f => ({ ...f, tags: f.tags.filter(x => x !== t) }));
+      }
+      function exportJSON() {
+        const blob = new Blob([JSON.stringify(ideas, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = "ginsprout-ideas.json"; a.click();
+        URL.revokeObjectURL(url);
+        setExportMsg("JSONエクスポート完了"); setTimeout(() => setExportMsg(""), 2000);
+      }
+      function exportCSV() {
+        const rows = [["タイトル","カテゴリ","ステータス","タグ","メモ","作成日","更新日"]];
+        ideas.forEach(i => rows.push([i.title, i.category, i.status, (i.tags||[]).join("/"), i.memo||"", formatDate(i.createdAt), formatDate(i.updatedAt)]));
+        const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+        const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = "ginsprout-ideas.csv"; a.click();
+        URL.revokeObjectURL(url);
+        setExportMsg("CSVエクスポート完了"); setTimeout(() => setExportMsg(""), 2000);
+      }
+
+      const S = {
+        root: { minHeight:"100vh", background:"#F7F5F0" },
+        header: { background:"#2C2C2C", padding:"16px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100 },
+        logo: { color:"#C4956A", fontSize:"18px", fontWeight:"bold", letterSpacing:"0.08em" },
+        logoSub: { color:"#8B8B8B", fontSize:"11px", letterSpacing:"0.15em", marginTop:"2px" },
+        newBtn: { background:"#C4956A", color:"#fff", border:"none", borderRadius:"6px", padding:"8px 16px", fontSize:"13px", cursor:"pointer", fontFamily:"inherit" },
+        container: { maxWidth:"720px", margin:"0 auto", padding:"16px" },
+        searchRow: { display:"flex", gap:"8px", marginBottom:"12px", flexWrap:"wrap" },
+        searchInput: { flex:1, minWidth:"160px", padding:"9px 12px", border:"1.5px solid #DDD9D0", borderRadius:"6px", fontSize:"14px", background:"#fff", fontFamily:"inherit", outline:"none" },
+        select: { padding:"9px 10px", border:"1.5px solid #DDD9D0", borderRadius:"6px", fontSize:"13px", background:"#fff", fontFamily:"inherit", outline:"none" },
+        exportRow: { display:"flex", gap:"8px", alignItems:"center", marginBottom:"16px" },
+        exportBtn: { padding:"6px 12px", border:"1.5px solid #C4956A", borderRadius:"5px", background:"transparent", color:"#C4956A", fontSize:"12px", cursor:"pointer", fontFamily:"inherit" },
+        card: { background:"#fff", borderRadius:"10px", padding:"16px", marginBottom:"10px", border:"1px solid #E8E4DC", cursor:"pointer" },
+        cardTitle: { fontSize:"16px", fontWeight:"bold", marginBottom:"6px" },
+        cardMeta: { display:"flex", gap:"8px", flexWrap:"wrap", alignItems:"center", marginBottom:"6px" },
+        statusBadge: (s) => ({ padding:"2px 8px", borderRadius:"20px", fontSize:"11px", fontWeight:"bold", color:getStatus(s).color, background:getStatus(s).bg }),
+        catBadge: { padding:"2px 8px", borderRadius:"20px", fontSize:"11px", background:"#F0F0F0", color:"#666" },
+        tag: { padding:"2px 7px", borderRadius:"20px", fontSize:"11px", background:"#EAF2F8", color:"#5B87A8" },
+        cardMemo: { fontSize:"13px", color:"#777", lineHeight:"1.6", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" },
+        cardDate: { fontSize:"11px", color:"#AAA", marginTop:"8px" },
+        empty: { textAlign:"center", padding:"60px 20px", color:"#AAA" },
+        backBtn: { background:"none", border:"none", color:"#C4956A", fontSize:"22px", cursor:"pointer", padding:"0", lineHeight:1 },
+        detailTitle: { fontSize:"22px", fontWeight:"bold", flex:1, lineHeight:1.4 },
+        detailMemo: { background:"#FAFAF7", border:"1px solid #E8E4DC", borderRadius:"8px", padding:"16px", fontSize:"14px", lineHeight:"1.9", minHeight:"100px", whiteSpace:"pre-wrap", marginBottom:"16px" },
+        editBtn: { padding:"9px 20px", background:"#2C2C2C", color:"#fff", border:"none", borderRadius:"6px", cursor:"pointer", fontSize:"13px", fontFamily:"inherit" },
+        deleteBtn: { padding:"9px 20px", background:"transparent", color:"#C0392B", border:"1.5px solid #C0392B", borderRadius:"6px", cursor:"pointer", fontSize:"13px", fontFamily:"inherit" },
+        label: { display:"block", fontSize:"12px", color:"#888", marginBottom:"5px", letterSpacing:"0.05em" },
+        input: { width:"100%", padding:"10px 12px", border:"1.5px solid #DDD9D0", borderRadius:"6px", fontSize:"14px", fontFamily:"inherit", outline:"none", background:"#fff", boxSizing:"border-box" },
+        textarea: { width:"100%", padding:"10px 12px", border:"1.5px solid #DDD9D0", borderRadius:"6px", fontSize:"14px", fontFamily:"inherit", outline:"none", background:"#fff", boxSizing:"border-box", minHeight:"140px", resize:"vertical", lineHeight:"1.7" },
+        tagEdit: { padding:"3px 8px", borderRadius:"20px", fontSize:"12px", background:"#EAF2F8", color:"#5B87A8", display:"flex", alignItems:"center", gap:"4px" },
+        tagX: { cursor:"pointer", fontWeight:"bold", fontSize:"13px" },
+        saveBtn: { padding:"11px 28px", background:"#C4956A", color:"#fff", border:"none", borderRadius:"7px", cursor:"pointer", fontSize:"14px", fontFamily:"inherit", fontWeight:"bold" },
+        cancelBtn: { padding:"11px 20px", background:"transparent", color:"#888", border:"1.5px solid #DDD", borderRadius:"7px", cursor:"pointer", fontSize:"14px", fontFamily:"inherit" },
+        divider: { height:"1px", background:"#E8E4DC", margin:"16px 0" },
+        countText: { fontSize:"12px", color:"#AAA", marginBottom:"10px" },
+      };
+
+      // FORM VIEW
+      if (view === "new" || view === "edit") {
+        return (
+          <div style={S.root}>
+            <div style={S.header}>
+              <div><div style={S.logo}>Ginsprout Idea Vault</div><div style={S.logoSub}>いぶし銀と創作の芽</div></div>
+            </div>
+            <div style={S.container}>
+              <div style={{ display:"flex", alignItems:"center", gap:"10px", margin:"16px 0" }}>
+                <button style={S.backBtn} onClick={() => setView(view === "new" ? "list" : "detail")}>←</button>
+                <span style={{ fontSize:"16px", fontWeight:"bold" }}>{view === "new" ? "新しいネタを追加" : "ネタを編集"}</span>
+              </div>
+              <div style={{ marginBottom:"16px" }}>
+                <label style={S.label}>タイトル *</label>
+                <input style={S.input} value={editForm.title} onChange={e => setEditForm(f => ({...f, title: e.target.value}))} placeholder="ネタのタイトルを入力" />
+              </div>
+              <div style={{ display:"flex", gap:"10px", marginBottom:"16px", flexWrap:"wrap" }}>
+                <div style={{ flex:1, minWidth:"140px" }}>
+                  <label style={S.label}>カテゴリ</label>
+                  <select style={S.input} value={editForm.category} onChange={e => setEditForm(f => ({...f, category: e.target.value}))}>
+                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex:1, minWidth:"120px" }}>
+                  <label style={S.label}>ステータス</label>
+                  <select style={S.input} value={editForm.status} onChange={e => setEditForm(f => ({...f, status: e.target.value}))}>
+                    {STATUSES.map(s => <option key={s.label}>{s.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginBottom:"16px" }}>
+                <label style={S.label}>メモ・詳細</label>
+                <textarea style={S.textarea} value={editForm.memo} onChange={e => setEditForm(f => ({...f, memo: e.target.value}))} placeholder="アイデアの詳細、背景、将来の展開などを自由に..." />
+              </div>
+              <div style={{ marginBottom:"16px" }}>
+                <label style={S.label}>タグ</label>
+                <div style={{ display:"flex", gap:"6px", flexWrap:"wrap", marginBottom:"6px" }}>
+                  {editForm.tags.map(t => (
+                    <span key={t} style={S.tagEdit}>{t}<span style={S.tagX} onClick={() => removeTag(t)}>×</span></span>
+                  ))}
+                </div>
+                <div style={{ display:"flex", gap:"6px" }}>
+                  <input style={{...S.input, flex:1}} value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addTag()} placeholder="タグを入力してEnterまたは追加" />
+                  <button onClick={addTag} style={{ padding:"7px 12px", background:"#5B87A8", color:"#fff", border:"none", borderRadius:"5px", cursor:"pointer", fontSize:"12px", fontFamily:"inherit" }}>追加</button>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:"10px", marginTop:"24px" }}>
+                <button style={S.saveBtn} onClick={saveIdea} disabled={!editForm.title.trim()}>保存する</button>
+                <button style={S.cancelBtn} onClick={() => setView(view === "new" ? "list" : "detail")}>キャンセル</button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // DETAIL VIEW
+      if (view === "detail" && selected) {
+        const idea = ideas.find(i => i.id === selected.id) || selected;
+        return (
+          <div style={S.root}>
+            <div style={S.header}>
+              <div><div style={S.logo}>Ginsprout Idea Vault</div><div style={S.logoSub}>いぶし銀と創作の芽</div></div>
+            </div>
+            <div style={S.container}>
+              <div style={{ margin:"16px 0 20px" }}>
+                <div style={{ display:"flex", alignItems:"flex-start", gap:"12px", marginBottom:"12px" }}>
+                  <button style={S.backBtn} onClick={() => setView("list")}>←</button>
+                  <div style={S.detailTitle}>{idea.title}</div>
+                </div>
+                <div style={{ display:"flex", gap:"8px", flexWrap:"wrap", alignItems:"center", marginBottom:"8px" }}>
+                  <span style={S.statusBadge(idea.status)}>{idea.status}</span>
+                  <span style={S.catBadge}>{idea.category}</span>
+                  {(idea.tags||[]).map(t => <span key={t} style={S.tag}>{t}</span>)}
+                </div>
+                <div style={{ fontSize:"11px", color:"#AAA", marginBottom:"16px" }}>
+                  作成: {formatDate(idea.createdAt)}　更新: {formatDate(idea.updatedAt)}
+                </div>
+                <div style={S.divider} />
+                <div style={S.detailMemo}>{idea.memo || "（メモなし）"}</div>
+                <div style={{ display:"flex", gap:"10px", flexWrap:"wrap" }}>
+                  <button style={S.editBtn} onClick={() => openEdit(idea)}>編集する</button>
+                  <button style={S.deleteBtn} onClick={() => deleteIdea(idea.id)}>削除</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // LIST VIEW
+      return (
+        <div style={S.root}>
+          <div style={S.header}>
+            <div><div style={S.logo}>Ginsprout Idea Vault</div><div style={S.logoSub}>いぶし銀と創作の芽</div></div>
+            <button style={S.newBtn} onClick={openNew}>＋ 新しいネタ</button>
+          </div>
+          <div style={S.container}>
+            <div style={{ height:"16px" }} />
+            <div style={S.searchRow}>
+              <input style={S.searchInput} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="🔍　タイトル・メモ・タグで検索..." />
+              <select style={S.select} value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+                <option>すべて</option>
+                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+              <select style={S.select} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                <option>すべて</option>
+                {STATUSES.map(s => <option key={s.label}>{s.label}</option>)}
+              </select>
+            </div>
+            <div style={S.exportRow}>
+              <button style={S.exportBtn} onClick={exportJSON}>JSONで保存</button>
+              <button style={S.exportBtn} onClick={exportCSV}>CSVで保存</button>
+              {exportMsg && <span style={{ fontSize:"12px", color:"#8B9E6E" }}>✓ {exportMsg}</span>}
+            </div>
+            <div style={S.countText}>{filtered.length}件のネタ</div>
+            {filtered.length === 0 && (
+              <div style={S.empty}>
+                <div style={{ fontSize:"40px", marginBottom:"12px" }}>🌱</div>
+                <div>ネタがまだありません</div>
+                <div style={{ fontSize:"12px", marginTop:"6px" }}>「＋ 新しいネタ」から追加してみましょう</div>
+              </div>
+            )}
+            {filtered.map(idea => (
+              <div key={idea.id} style={S.card} onClick={() => { setSelected(idea); setView("detail"); }}>
+                <div style={S.cardTitle}>{idea.title}</div>
+                <div style={S.cardMeta}>
+                  <span style={S.statusBadge(idea.status)}>{idea.status}</span>
+                  <span style={S.catBadge}>{idea.category}</span>
+                  {(idea.tags||[]).slice(0,3).map(t => <span key={t} style={S.tag}>{t}</span>)}
+                </div>
+                {idea.memo && <div style={S.cardMemo}>{idea.memo}</div>}
+                <div style={S.cardDate}>更新: {formatDate(idea.updatedAt)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
