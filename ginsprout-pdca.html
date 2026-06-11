@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>Ginsprout PDCA</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+
+:root {
+  --bg:       #0F0E0C;
+  --surface:  #1A1916;
+  --card:     #201E1A;
+  --border:   #2E2B26;
+  --muted:    #4A4640;
+  --text:     #E8E2D8;
+  --sub:      #8A8278;
+  --gold:     #C8A96A;
+  --gold-dim: #7A6A42;
+  --blue:     #7C9EBF;
+  --red:      #B07070;
+  --green:    #7A9E7A;
+  --purple:   #9880B0;
+  --radius:   12px;
+  --tab-h:    56px;
+  --safe-b:   env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+  overscroll-behavior: none;
+}
+
+/* ── Layout ── */
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+
+header {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px 0;
+}
+.header-top {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+}
+.logo { font-size: 15px; letter-spacing: 3px; color: var(--gold); font-weight: 700; }
+.logo span { font-size: 10px; color: var(--muted); letter-spacing: 1px; font-weight: 300; margin-left: 8px; }
+
+.tab-bar {
+  display: flex; overflow-x: auto;
+  scrollbar-width: none;
+}
+.tab-bar::-webkit-scrollbar { display: none; }
+.tab-btn {
+  flex: 1; min-width: 70px;
+  padding: 8px 4px;
+  background: none; border: none;
+  color: var(--muted); font-size: 12px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer; white-space: nowrap;
+  font-family: inherit; font-weight: 500;
+  transition: color .15s;
+}
+.tab-btn.active { color: var(--text); border-bottom-color: var(--gold); }
+
+main {
+  flex: 1;
+  padding: 16px 16px calc(var(--tab-h) + var(--safe-b) + 8px);
+  max-width: 600px; width: 100%; margin: 0 auto;
+}
+
+/* ── Cards / Sections ── */
+.section-label {
+  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--sub); margin-bottom: 10px; margin-top: 20px;
+}
+.section-label:first-child { margin-top: 0; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 8px;
+}
+.card.accent-left { border-left-width: 3px; }
+
+/* ── Inputs ── */
+input[type=text], input[type=date], textarea, select {
+  font-family: inherit; font-size: 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px;
+  padding: 10px 12px; width: 100%; outline: none;
+  appearance: none; -webkit-appearance: none;
+}
+input:focus, textarea:focus, select:focus { border-color: var(--gold-dim); }
+textarea { resize: none; min-height: 72px; }
+select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238A8278' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+
+.field { margin-bottom: 8px; }
+.field label { display: block; font-size: 11px; color: var(--sub); margin-bottom: 4px; }
+
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* ── Buttons ── */
+.btn {
+  font-family: inherit; cursor: pointer; border: none;
+  border-radius: 8px; font-size: 13px; font-weight: 500;
+  padding: 10px 18px; transition: opacity .15s;
+}
+.btn:active { opacity: .7; }
+.btn-primary { background: #2E2A22; color: var(--gold); }
+.btn-ghost { background: none; color: var(--sub); border: 1px solid var(--border); }
+.btn-full { width: 100%; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-danger { color: var(--red); }
+
+/* ── Tags ── */
+.tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+}
+
+/* ── Progress ── */
+.prog-bar {
+  height: 4px; background: var(--border);
+  border-radius: 2px; overflow: hidden; margin-top: 6px;
+}
+.prog-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+
+/* ── Big number ── */
+.big-num { font-size: 30px; font-weight: 700; line-height: 1; }
+
+/* ── Task item ── */
+.task-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: 6px;
+}
+.task-check {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--muted); background: none;
+  flex-shrink: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: #fff; margin-top: 1px;
+  transition: background .15s, border-color .15s;
+}
+.task-info { flex: 1; min-width: 0; }
+.task-title { font-size: 14px; line-height: 1.4; margin-bottom: 4px; word-break: break-all; }
+.task-title.done { text-decoration: line-through; color: var(--muted); }
+.task-meta { display: flex; gap: 4px; flex-wrap: wrap; }
+.task-del { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 2px; flex-shrink: 0; }
+
+/* ── Filters ── */
+.filter-row {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.filter-btn {
+  padding: 5px 12px; border-radius: 20px; font-size: 12px;
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--sub); cursor: pointer; font-family: inherit;
+  transition: all .15s;
+}
+.filter-btn.active { color: var(--gold); border-color: var(--gold-dim); background: #2A2418; }
+
+/* ── Range ── */
+input[type=range] {
+  width: 100%; height: 4px; border-radius: 2px; background: var(--border);
+  outline: none; border: none; padding: 0; cursor: pointer;
+  -webkit-appearance: none; margin: 6px 0;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--gold); cursor: pointer;
+}
+
+/* ── Stat cards ── */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; text-align: center; }
+.stat-label { font-size: 11px; color: var(--sub); margin-top: 4px; }
+
+/* ── Empty state ── */
+.empty { font-size: 13px; color: var(--muted); padding: 20px 0; text-align: center; }
+
+/* ── Modal / Sheet ── */
+.sheet-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  z-index: 200; display: flex; align-items: flex-end;
+}
+.sheet {
+  background: var(--surface); border-radius: 16px 16px 0 0;
+  padding: 20px 16px calc(20px + var(--safe-b));
+  width: 100%; max-height: 90vh; overflow-y: auto;
+}
+.sheet-handle { width: 36px; height: 4px; background: var(--muted); border-radius: 2px; margin: 0 auto 16px; }
+.sheet-title { font-size: 15px; font-weight: 700; margin-bottom: 16px; }
+
+/* ── Color dot ── */
+.color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed; bottom: calc(var(--tab-h) + var(--safe-b) + 12px); left: 50%;
+  transform: translateX(-50%);
+  background: #2E2A22; color: var(--gold);
+  padding: 8px 16px; border-radius: 20px; font-size: 12px;
+  z-index: 300; white-space: nowrap; pointer-events: none;
+  animation: fadeUp .2s ease;
+}
+@keyframes fadeUp { from { opacity:0; transform:translateX(-50%) translateY(8px); } }
+
+/* ── Dashboard ── */
+.proj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+.proj-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
+.proj-name { font-size: 12px; color: var(--gold); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proj-rate { font-size: 22px; font-weight: 700; }
+
+/* ── Backup buttons ── */
+.backup-row { display: flex; gap: 8px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="header-top">
+      <div class="logo">GINSPROUT <span>PDCA</span></div>
+      <button class="btn btn-ghost btn-sm" id="menuBtn">⚙</button>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="plan">Plan</button>
+      <button class="tab-btn" data-tab="do">Do</button>
+      <button class="tab-btn" data-tab="check">Check</button>
+    </div>
+  </header>
+  <main id="main"></main>
+</div>
+
+<!-- Add Task Sheet -->
+<div class="sheet-overlay" id="addSheet" style="display:none">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">タスクを追加</div>
+    <div class="field"><input type="text" id="taskTitle" placeholder="タスク名" maxlength="60"/></div>
+    <div class="row2">
+      <div class="field"><label>プロジェクト</label><select id="taskProject"></select></div>
+      <div class="field"><label>優先度</label>
+        <select id="taskPriority">
+          <option value="high">高</option>
+          <option value="medium" selected>中</option>
+          <option value="low">低</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>対象週（月曜日）</label><input type="date" id="taskWeek"/></div>
+    <div class="field"><textarea id="taskMemo" placeholder="メモ（任意）"></textarea></div>
+    <button class="btn btn-primary btn-full" id="addTaskBtn" style="margin-top:4px">追加する</button>
+    <button class="btn btn-ghost btn-full" id="cancelAddBtn" style="margin-top:8px">キャンセル</button>
+  </div>
+</div>
+
+<!-- Settings Sheet -->
+<div class="sheet-overlay" id="settingsSheet" style="display:none">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">設定</div>
+
+    <div class="section-label">プロジェクト</div>
+    <div id="projList"></div>
+    <div class="card" style="margin-top:8px">
+      <div class="row2" style="margin-bottom:8px">
+        <div class="field"><label>名前</label><input type="text" id="newProjName" placeholder="プロジェクト名" maxlength="20"/></div>
+        <div class="field"><label>アイコン</label><input type="text" id="newProjIcon" value="⭐" maxlength="2"/></div>
+      </div>
+      <div class="field"><label>カラー</label><input type="color" id="newProjColor" value="#7C9EBF" style="padding:4px;height:36px"/></div>
+      <button class="btn btn-primary btn-full" id="addProjBtn" style="margin-top:8px">プロジェクト追加</button>
+    </div>
+
+    <div class="section-label" style="margin-top:16px">データ管理</div>
+    <div class="backup-row">
+      <button class="btn btn-ghost" style="flex:1" id="exportBtn">📤 バックアップ</button>
+      <button class="btn btn-ghost" style="flex:1" id="importBtn">📥 復元</button>
+      <input type="file" id="importFile" accept=".json" style="display:none"/>
+    </div>
+    <button class="btn btn-ghost btn-full btn-danger" id="clearBtn" style="margin-top:8px">全データ削除</button>
+
+    <button class="btn btn-ghost btn-full" id="closeSettingsBtn" style="margin-top:16px">閉じる</button>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────
+const DEFAULT_PROJECTS = [
+  { id:"design",  name:"一般デザイン",  color:"#7C9EBF", icon:"✏️" },
+  { id:"novel",   name:"小説（遊夢）",  color:"#B08A8A", icon:"📖" },
+  { id:"support", name:"発達×デザイン", color:"#8AAF8A", icon:"🌱" },
+  { id:"other",   name:"その他事業",    color:"#9880B0", icon:"✦"  },
+];
+
+let state = {
+  projects: JSON.parse(localStorage.getItem("gs_projects")) || DEFAULT_PROJECTS,
+  tasks:    JSON.parse(localStorage.getItem("gs_tasks"))    || [],
+  reviews:  JSON.parse(localStorage.getItem("gs_reviews"))  || [],
+};
+
+let currentTab = "dashboard";
+let doFilter   = "all";
+let checkWeek  = null;
+
+function save() {
+  localStorage.setItem("gs_projects", JSON.stringify(state.projects));
+  localStorage.setItem("gs_tasks",    JSON.stringify(state.tasks));
+  localStorage.setItem("gs_reviews",  JSON.stringify(state.reviews));
+}
+
+// ── Helpers ────────────────────────────────────────────
+const today = () => new Date().toISOString().slice(0,10);
+function thisWeek() {
+  const d = new Date(), day = d.getDay();
+  const diff = d.getDate() - day + (day===0 ? -6 : 1);
+  return new Date(new Date().setDate(diff)).toISOString().slice(0,10);
+}
+function weekLabel(w) {
+  const d = new Date(w), e = new Date(d);
+  e.setDate(d.getDate()+6);
+  return `${d.getMonth()+1}/${d.getDate()}〜${e.getMonth()+1}/${e.getDate()}`;
+}
+const getProj  = id => state.projects.find(p=>p.id===id) || {name:"不明",color:"#999",icon:"?"};
+const priColor = p => ({high:"#C97C7C",medium:"#B09060",low:"#7A9E7A"}[p]||"#999");
+const priLabel = p => ({high:"高",medium:"中",low:"低"}[p]||p);
+const weekTasks = w => state.tasks.filter(t=>t.week===w);
+const weekDone  = w => weekTasks(w).filter(t=>t.done).length;
+const weekRate  = w => { const n=weekTasks(w).length; return n?Math.round(weekDone(w)/n*100):0; };
+const allWeeks  = () => [...new Set(state.tasks.map(t=>t.week))].sort().reverse();
+function projRate(pid) {
+  const ts = state.tasks.filter(t=>t.projectId===pid);
+  return ts.length ? Math.round(ts.filter(t=>t.done).length/ts.length*100) : 0;
+}
+
+let toastTimer;
+function toast(msg) {
+  document.querySelectorAll(".toast").forEach(e=>e.remove());
+  clearTimeout(toastTimer);
+  const el = document.createElement("div");
+  el.className = "toast"; el.textContent = msg;
+  document.body.appendChild(el);
+  toastTimer = setTimeout(()=>el.remove(), 2000);
+}
+
+// ── Render ─────────────────────────────────────────────
+function render() {
+  const main = document.getElementById("main");
+  if      (currentTab==="dashboard") main.innerHTML = renderDashboard();
+  else if (currentTab==="plan")      main.innerHTML = renderPlan();
+  else if (currentTab==="do")        main.innerHTML = renderDo();
+  else if (currentTab==="check")     main.innerHTML = renderCheck();
+  bindMain();
+}
+
+// ── Dashboard ──────────────────────────────────────────
+function renderDashboard() {
+  const w = thisWeek();
+  const undone = weekTasks(w).filter(t=>!t.done);
+  return `
+    <div class="section-label">プロジェクト別達成率</div>
+    <div class="proj-grid">
+      ${state.projects.map(p=>{
+        const r=projRate(p.id), ts=state.tasks.filter(t=>t.projectId===p.id);
+        return `<div class="proj-card" style="border-left:3px solid ${p.color}">
+          <div class="proj-name">${p.icon} ${p.name}</div>
+          <div class="proj-rate" style="color:${p.color}">${r}%</div>
+          <div style="font-size:11px;color:var(--sub);margin:2px 0 4px">${ts.filter(t=>t.done).length}/${ts.length}件</div>
+          <div class="prog-bar"><div class="prog-fill" style="width:${r}%;background:${p.color}"></div></div>
+        </div>`;
+      }).join("")}
+    </div>
+
+    <div class="section-label">今週 ${weekLabel(w)}</div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div class="big-num" style="color:var(--gold)">${weekRate(w)}%</div>
+          <div style="font-size:11px;color:var(--sub);margin-top:2px">達成率</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:22px;font-weight:700">${weekDone(w)}<span style="font-size:12px;color:var(--sub)">/${weekTasks(w).length}</span></div>
+          <div style="font-size:11px;color:var(--sub)">完了タスク</div>
+        </div>
+      </div>
+      <div class="prog-bar" style="height:6px;margin-top:10px">
+        <div class="prog-fill" style="width:${weekRate(w)}%;background:linear-gradient(90deg,var(--gold-dim),var(--gold))"></div>
+      </div>
+    </div>
+
+    <div class="section-label">今週の未完了タスク</div>
+    ${undone.length===0
+      ? `<div class="empty">未完了タスクはありません ✦</div>`
+      : undone.map(t=>{ const p=getProj(t.projectId); return `
+        <div class="task-item" style="border-left:3px solid ${p.color}">
+          <div class="task-info">
+            <div class="task-title">${t.title}</div>
+            <div class="task-meta">
+              <span class="tag" style="background:${p.color}22;color:${p.color}">${p.icon} ${p.name}</span>
+              <span class="tag" style="background:${priColor(t.priority)}22;color:${priColor(t.priority)}">${priLabel(t.priority)}</span>
+            </div>
+          </div>
+        </div>`}).join("")}
+
+    <div style="margin-top:16px;text-align:center">
+      <button class="btn btn-primary" id="openAddBtn" style="padding:12px 32px;font-size:14px">＋ タスクを追加</button>
+    </div>
+  `;
+}
+
+// ── Plan ───────────────────────────────────────────────
+function renderPlan() {
+  const weeks = [thisWeek(),...allWeeks().filter(w=>w!==thisWeek())];
+  const fw = document.getElementById("planWeekFilter")?.value || thisWeek();
+  const fp = document.getElementById("planProjFilter")?.value || "all";
+  const filtered = state.tasks.filter(t=>(fp==="all"||t.projectId===fp)&&t.week===fw);
+  return `
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <select id="planWeekFilter" style="flex:1">
+        ${weeks.map(w=>`<option value="${w}" ${w===fw?"selected":""}>${weekLabel(w)}</option>`).join("")}
+      </select>
+      <select id="planProjFilter" style="flex:1">
+        <option value="all" ${fp==="all"?"selected":""}>全プロジェクト</option>
+        ${state.projects.map(p=>`<option value="${p.id}" ${p.id===fp?"selected":""}>${p.name}</option>`).join("")}
+      </select>
+    </div>
+
+    <button class="btn btn-primary btn-full" id="openAddBtn" style="margin-bottom:12px">＋ タスクを追加</button>
+
+    <div class="section-label">タスク一覧</div>
+    ${filtered.length===0
+      ? `<div class="empty">タスクがありません</div>`
+      : filtered.map(t=>{ const p=getProj(t.projectId); return `
+        <div class="task-item" style="border-left:3px solid ${p.color};opacity:${t.done?".5":"1"}">
+          <div class="task-info">
+            <div class="task-title ${t.done?"done":""}">${t.title}</div>
+            ${t.memo?`<div style="font-size:11px;color:var(--sub);margin-bottom:4px">${t.memo}</div>`:""}
+            <div class="task-meta">
+              <span class="tag" style="background:${p.color}22;color:${p.color}">${p.icon} ${p.name}</span>
+              <span class="tag" style="background:${priColor(t.priority)}22;color:${priColor(t.priority)}">${priLabel(t.priority)}</span>
+              ${t.done?`<span class="tag" style="background:#4A6A4A22;color:#8AAF8A">✓完了</span>`:""}
+            </div>
+          </div>
+          <button class="task-del" data-id="${t.id}">×</button>
+        </div>`}).join("")}
+  `;
+}
+
+// ── Do ─────────────────────────────────────────────────
+function renderDo() {
+  const filters = [["all","すべて"],["undone","未完了"],["done","完了済み"]];
+  const doTasks = state.tasks.filter(t=>{
+    if(doFilter==="all")   return true;
+    if(doFilter==="undone")return !t.done;
+    if(doFilter==="done")  return t.done;
+    return t.projectId===doFilter;
+  });
+  return `
+    <div class="filter-row">
+      ${filters.map(([v,l])=>`<button class="filter-btn ${doFilter===v?"active":""}" data-filter="${v}">${l}</button>`).join("")}
+      ${state.projects.map(p=>`<button class="filter-btn ${doFilter===p.id?"active":""}" data-filter="${p.id}" style="${doFilter===p.id?`border-color:${p.color};color:${p.color}`:""}">${p.icon}</button>`).join("")}
+    </div>
+    ${doTasks.length===0
+      ? `<div class="empty">タスクがありません</div>`
+      : doTasks.map(t=>{ const p=getProj(t.projectId); return `
+        <div class="task-item" style="border-left:3px solid ${p.color}">
+          <button class="task-check" data-id="${t.id}" style="border-color:${p.color};${t.done?`background:${p.color}`:""}">
+            ${t.done?"✓":""}
+          </button>
+          <div class="task-info">
+            <div class="task-title ${t.done?"done":""}">${t.title}</div>
+            <div class="task-meta" style="margin-bottom:${!t.done?"6px":"0"}">
+              <span class="tag" style="background:${p.color}22;color:${p.color}">${p.icon} ${p.name}</span>
+              <span style="font-size:11px;color:var(--sub)">${weekLabel(t.week)}</span>
+            </div>
+            ${!t.done?`
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--sub)">
+                <span>進捗</span><span>${t.progress||0}%</span>
+              </div>
+              <input type="range" min="0" max="100" step="10" value="${t.progress||0}" data-id="${t.id}" class="prog-range"/>
+              <div class="prog-bar"><div class="prog-fill" style="width:${t.progress||0}%;background:${p.color}"></div></div>
+            `:t.doneAt?`<div style="font-size:11px;color:var(--muted)">完了日: ${t.doneAt}</div>`:""}
+          </div>
+        </div>`}).join("")}
+  `;
+}
+
+// ── Check ──────────────────────────────────────────────
+function renderCheck() {
+  const weeks = [thisWeek(),...allWeeks().filter(w=>w!==thisWeek())];
+  if(!checkWeek || !weeks.includes(checkWeek)) checkWeek = weeks[0] || thisWeek();
+  const w = checkWeek;
+  const rate = weekRate(w);
+  const done = weekDone(w);
+  const total = weekTasks(w).length;
+
+  const revs = state.reviews.filter(r=>r.week===w);
+
+  return `
+    <div class="filter-row">
+      ${weeks.slice(0,6).map(wk=>`<button class="filter-btn week-sel ${w===wk?"active":""}" data-week="${wk}">${weekLabel(wk)}</button>`).join("")}
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="big-num" style="color:var(--gold)">${rate}%</div>
+        <div class="stat-label">達成率</div>
+      </div>
+      <div class="stat-card">
+        <div class="big-num" style="color:#7A9E7A">${done}</div>
+        <div class="stat-label">完了</div>
+      </div>
+      <div class="stat-card">
+        <div class="big-num" style="color:#C97C7C">${total-done}</div>
+        <div class="stat-label">残り</div>
+      </div>
+    </div>
+
+    <div class="section-label">プロジェクト別</div>
+    <div class="card" style="margin-bottom:12px">
+      ${state.projects.map(p=>{
+        const pt = state.tasks.filter(t=>t.projectId===p.id&&t.week===w);
+        if(!pt.length) return "";
+        const r = Math.round(pt.filter(t=>t.done).length/pt.length*100);
+        return `<div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+            <span style="color:${p.color}">${p.icon} ${p.name}</span>
+            <span style="color:var(--sub)">${pt.filter(t=>t.done).length}/${pt.length}件 (${r}%)</span>
+          </div>
+          <div class="prog-bar"><div class="prog-fill" style="width:${r}%;background:${p.color}"></div></div>
+        </div>`;
+      }).join("")}
+      ${state.projects.every(p=>!state.tasks.filter(t=>t.projectId===p.id&&t.week===w).length)?`<div class="empty">この週のタスクがありません</div>`:""}
+    </div>
+
+    <div class="section-label">振り返りメモ</div>
+    <div class="card">
+      <textarea id="reviewMemo" placeholder="今週の感想・気づき・次週への意図など" rows="3"></textarea>
+      <button class="btn btn-primary btn-full" id="saveReviewBtn" style="margin-top:8px">保存</button>
+    </div>
+    ${revs.map(r=>`
+      <div class="card" style="border-left:2px solid var(--muted);font-size:13px;line-height:1.8;color:#C0B9AD">
+        ${r.memo.replace(/\n/g,"<br>")}
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">${r.createdAt}</div>
+      </div>`).join("")}
+  `;
+}
+
+// ── Bind Events ────────────────────────────────────────
+function bindMain() {
+  // open add sheet
+  document.querySelectorAll("#openAddBtn").forEach(b=>b.addEventListener("click",openAddSheet));
+
+  // delete task
+  document.querySelectorAll(".task-del").forEach(b=>b.addEventListener("click",e=>{
+    const id = e.currentTarget.dataset.id;
+    if(confirm("削除しますか？")) { state.tasks = state.tasks.filter(t=>t.id!==id); save(); render(); }
+  }));
+
+  // toggle done
+  document.querySelectorAll(".task-check").forEach(b=>b.addEventListener("click",e=>{
+    const id = e.currentTarget.dataset.id;
+    state.tasks = state.tasks.map(t=>t.id===id?{...t,done:!t.done,doneAt:!t.done?today():null}:t);
+    save(); render();
+  }));
+
+  // progress range
+  document.querySelectorAll(".prog-range").forEach(r=>r.addEventListener("input",e=>{
+    const id = e.target.dataset.id, val = Number(e.target.value);
+    state.tasks = state.tasks.map(t=>t.id===id?{...t,progress:val}:t);
+    save();
+    // update fill without full re-render
+    const fill = e.target.nextElementSibling?.querySelector(".prog-fill");
+    if(fill){ fill.style.width=val+"%"; }
+    const span = e.target.previousElementSibling?.querySelector("span:last-child");
+    if(span){ span.textContent=val+"%"; }
+  }));
+
+  // filter buttons (Do)
+  document.querySelectorAll(".filter-btn[data-filter]").forEach(b=>b.addEventListener("click",e=>{
+    doFilter = e.currentTarget.dataset.filter; render();
+  }));
+
+  // week selector (Check)
+  document.querySelectorAll(".week-sel").forEach(b=>b.addEventListener("click",e=>{
+    checkWeek = e.currentTarget.dataset.week; render();
+  }));
+
+  // plan filters
+  document.querySelectorAll("#planWeekFilter,#planProjFilter").forEach(s=>s.addEventListener("change",render));
+
+  // save review
+  const saveRevBtn = document.getElementById("saveReviewBtn");
+  if(saveRevBtn) saveRevBtn.addEventListener("click",()=>{
+    const memo = document.getElementById("reviewMemo").value.trim();
+    if(!memo) return;
+    state.reviews.push({id:Date.now().toString(),week:checkWeek||thisWeek(),memo,createdAt:today()});
+    save(); toast("保存しました"); render();
+  });
+}
+
+// ── Add Sheet ──────────────────────────────────────────
+function openAddSheet() {
+  const sel = document.getElementById("taskProject");
+  sel.innerHTML = state.projects.map(p=>`<option value="${p.id}">${p.icon} ${p.name}</option>`).join("");
+  document.getElementById("taskWeek").value = thisWeek();
+  document.getElementById("taskTitle").value = "";
+  document.getElementById("taskMemo").value = "";
+  document.getElementById("addSheet").style.display = "flex";
+  setTimeout(()=>document.getElementById("taskTitle").focus(), 100);
+}
+document.getElementById("cancelAddBtn").addEventListener("click",()=>{ document.getElementById("addSheet").style.display="none"; });
+document.getElementById("addSheet").addEventListener("click",e=>{ if(e.target===e.currentTarget) e.currentTarget.style.display="none"; });
+document.getElementById("addTaskBtn").addEventListener("click",()=>{
+  const title = document.getElementById("taskTitle").value.trim();
+  if(!title) { toast("タスク名を入力してください"); return; }
+  state.tasks.push({
+    id: Date.now().toString(),
+    title,
+    projectId: document.getElementById("taskProject").value,
+    priority:  document.getElementById("taskPriority").value,
+    week:      document.getElementById("taskWeek").value || thisWeek(),
+    memo:      document.getElementById("taskMemo").value.trim(),
+    done: false, progress: 0, doneAt: null, addedAt: today()
+  });
+  save(); toast("追加しました");
+  document.getElementById("addSheet").style.display="none";
+  render();
+});
+
+// ── Settings Sheet ─────────────────────────────────────
+function openSettings() {
+  renderProjList();
+  document.getElementById("settingsSheet").style.display="flex";
+}
+function renderProjList() {
+  document.getElementById("projList").innerHTML = state.projects.map(p=>`
+    <div class="card" style="display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:6px">
+      <span class="color-dot" style="background:${p.color}"></span>
+      <span style="flex:1;font-size:13px">${p.icon} ${p.name}</span>
+      <button class="btn btn-ghost btn-sm btn-danger del-proj" data-id="${p.id}">削除</button>
+    </div>`).join("");
+  document.querySelectorAll(".del-proj").forEach(b=>b.addEventListener("click",e=>{
+    const id = e.currentTarget.dataset.id;
+    if(state.projects.length<=1){toast("最低1つ必要です");return;}
+    if(confirm("削除しますか？（このプロジェクトのタスクは残ります）")){
+      state.projects = state.projects.filter(p=>p.id!==id); save(); renderProjList();
+    }
+  }));
+}
+document.getElementById("menuBtn").addEventListener("click", openSettings);
+document.getElementById("settingsSheet").addEventListener("click",e=>{ if(e.target===e.currentTarget) e.currentTarget.style.display="none"; });
+document.getElementById("closeSettingsBtn").addEventListener("click",()=>{ document.getElementById("settingsSheet").style.display="none"; render(); });
+
+document.getElementById("addProjBtn").addEventListener("click",()=>{
+  const name = document.getElementById("newProjName").value.trim();
+  if(!name){toast("名前を入力してください");return;}
+  state.projects.push({ id:"proj_"+Date.now(), name, icon: document.getElementById("newProjIcon").value||"⭐", color: document.getElementById("newProjColor").value });
+  save(); toast("追加しました"); renderProjList();
+  document.getElementById("newProjName").value="";
+});
+
+// ── Export / Import ────────────────────────────────────
+document.getElementById("exportBtn").addEventListener("click",()=>{
+  const data = JSON.stringify({projects:state.projects,tasks:state.tasks,reviews:state.reviews,exportedAt:new Date().toISOString()}, null, 2);
+  const a = document.createElement("a");
+  a.href = "data:application/json;charset=utf-8,"+encodeURIComponent(data);
+  a.download = `ginsprout-pdca-${today()}.json`;
+  a.click(); toast("バックアップしました");
+});
+document.getElementById("importBtn").addEventListener("click",()=>document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change",e=>{
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const d = JSON.parse(ev.target.result);
+      if(!d.tasks||!d.projects) throw new Error();
+      if(!confirm("現在のデータを上書きして復元しますか？")) return;
+      state.projects = d.projects; state.tasks = d.tasks; state.reviews = d.reviews||[];
+      save(); toast("復元しました");
+      document.getElementById("settingsSheet").style.display="none";
+      render();
+    } catch { toast("ファイルが正しくありません"); }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+document.getElementById("clearBtn").addEventListener("click",()=>{
+  if(!confirm("全データを削除しますか？この操作は元に戻せません。")) return;
+  state = {projects:DEFAULT_PROJECTS,tasks:[],reviews:[]};
+  save(); toast("削除しました");
+  document.getElementById("settingsSheet").style.display="none";
+  render();
+});
+
+// ── Tab bar ────────────────────────────────────────────
+document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",e=>{
+  currentTab = e.currentTarget.dataset.tab;
+  document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));
+  e.currentTarget.classList.add("active");
+  render();
+}));
+
+// ── Init ───────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
