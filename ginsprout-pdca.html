@@ -270,6 +270,30 @@ input[type=range]::-webkit-slider-thumb {
   </div>
 </div>
 
+<!-- Edit Task Sheet -->
+<div class="sheet-overlay" id="editSheet" style="display:none">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">タスクを編集</div>
+    <input type="hidden" id="editTaskId"/>
+    <div class="field"><input type="text" id="editTitle" placeholder="タスク名" maxlength="60"/></div>
+    <div class="row2">
+      <div class="field"><label>プロジェクト</label><select id="editProject"></select></div>
+      <div class="field"><label>優先度</label>
+        <select id="editPriority">
+          <option value="high">高</option>
+          <option value="medium">中</option>
+          <option value="low">低</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>対象週（月曜日）</label><input type="date" id="editWeek"/></div>
+    <div class="field"><textarea id="editMemo" placeholder="メモ（任意）"></textarea></div>
+    <button class="btn btn-primary btn-full" id="saveEditBtn" style="margin-top:4px">保存する</button>
+    <button class="btn btn-ghost btn-full" id="cancelEditBtn" style="margin-top:8px">キャンセル</button>
+  </div>
+</div>
+
 <!-- Settings Sheet -->
 <div class="sheet-overlay" id="settingsSheet" style="display:none">
   <div class="sheet">
@@ -456,6 +480,7 @@ function renderPlan() {
               ${t.done?`<span class="tag" style="background:#4A6A4A22;color:#8AAF8A">✓完了</span>`:""}
             </div>
           </div>
+          <button class="task-edit btn-edit" data-id="${t.id}" style="background:none;border:none;color:var(--sub);font-size:13px;cursor:pointer;padding:0 4px;flex-shrink:0">✏️</button>
           <button class="task-del" data-id="${t.id}">×</button>
         </div>`}).join("")}
   `;
@@ -566,6 +591,12 @@ function bindMain() {
   // open add sheet
   document.querySelectorAll("#openAddBtn").forEach(b=>b.addEventListener("click",openAddSheet));
 
+  // edit task
+  document.querySelectorAll(".btn-edit").forEach(b=>b.addEventListener("click",e=>{
+    e.stopPropagation();
+    openEditSheet(e.currentTarget.dataset.id);
+  }));
+
   // delete task
   document.querySelectorAll(".task-del").forEach(b=>b.addEventListener("click",e=>{
     const id = e.currentTarget.dataset.id;
@@ -624,6 +655,40 @@ function openAddSheet() {
   document.getElementById("addSheet").style.display = "flex";
   setTimeout(()=>document.getElementById("taskTitle").focus(), 100);
 }
+// ── Edit Sheet ───────────────────────────────────────
+function openEditSheet(id) {
+  const t = state.tasks.find(x=>x.id===id);
+  if(!t) return;
+  const sel = document.getElementById("editProject");
+  sel.innerHTML = state.projects.map(p=>`<option value="${p.id}">${p.icon} ${p.name}</option>`).join("");
+  document.getElementById("editTaskId").value  = t.id;
+  document.getElementById("editTitle").value   = t.title;
+  document.getElementById("editProject").value = t.projectId;
+  document.getElementById("editPriority").value= t.priority;
+  document.getElementById("editWeek").value    = t.week;
+  document.getElementById("editMemo").value    = t.memo||"";
+  document.getElementById("editSheet").style.display = "flex";
+  setTimeout(()=>document.getElementById("editTitle").focus(), 100);
+}
+document.getElementById("cancelEditBtn").addEventListener("click",()=>{ document.getElementById("editSheet").style.display="none"; });
+document.getElementById("editSheet").addEventListener("click",e=>{ if(e.target===e.currentTarget) e.currentTarget.style.display="none"; });
+document.getElementById("saveEditBtn").addEventListener("click",()=>{
+  const id    = document.getElementById("editTaskId").value;
+  const title = document.getElementById("editTitle").value.trim();
+  if(!title){ toast("タスク名を入力してください"); return; }
+  state.tasks = state.tasks.map(t=>t.id===id ? {
+    ...t,
+    title,
+    projectId: document.getElementById("editProject").value,
+    priority:  document.getElementById("editPriority").value,
+    week:      document.getElementById("editWeek").value || t.week,
+    memo:      document.getElementById("editMemo").value.trim(),
+  } : t);
+  save(); toast("更新しました");
+  document.getElementById("editSheet").style.display="none";
+  render();
+});
+
 document.getElementById("cancelAddBtn").addEventListener("click",()=>{ document.getElementById("addSheet").style.display="none"; });
 document.getElementById("addSheet").addEventListener("click",e=>{ if(e.target===e.currentTarget) e.currentTarget.style.display="none"; });
 document.getElementById("addTaskBtn").addEventListener("click",()=>{
