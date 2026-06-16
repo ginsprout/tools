@@ -294,11 +294,11 @@ async function analyze(){
   if(profile) userMsg += `\n\n【年齢・特性など】\n${profile}`;
 
   try{
-    const res = await fetch("https://api.anthropic.com/v1/messages",{
+    const res = await fetch("https://ginsprout-proxy.yumco-taka.workers.dev/",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
-        model:"claude-sonnet-4-20250514",
+        model:"claude-sonnet-4-6",
         max_tokens:1000,
         system:SYSTEM,
         messages:[{role:"user",content:userMsg}]

@@ -418,11 +418,11 @@
   "why_it_works": "なぜこれが元のアイデアと同じ支援効果を持つか（1〜2文）"
 }`;
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://ginsprout-proxy.yumco-taka.workers.dev/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 600,
         system,
         messages: [{ role: "user", content: input }]

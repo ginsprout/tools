@@ -62,10 +62,10 @@ const COCKTAIL_MENU = [
 ];
 
 async function callClaude(messages, system, maxTokens = 900) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("https://ginsprout-proxy.yumco-taka.workers.dev/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: maxTokens, system, messages }),
+    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: maxTokens, system, messages }),
   });
   const data = await res.json();
   return data.content?.[0]?.text || "";
