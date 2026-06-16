@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Idea Catcher — Ginsprout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Noto+Serif+JP:wght@300;400;500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:       #1a1a2e;
+    --paper:     #e8e0d0;
+    --paper-dim: #d4cabb;
+    --teal:      #5f8a8b;
+    --teal-dim:  #3d6364;
+    --gold:      #c9a84c;
+    --ghost:     #8a8070;
+    --surface:   #f2ece0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Noto Serif JP', serif;
+    font-weight: 300;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 16px 80px;
+  }
+
+  /* ── ヘッダー ── */
+  header {
+    width: 100%;
+    max-width: 680px;
+    padding: 36px 0 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .brand {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.1rem;
+    color: var(--gold);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .brand-sub {
+    font-size: .72rem;
+    color: var(--ghost);
+    letter-spacing: .2em;
+    text-transform: uppercase;
+  }
+
+  /* ── AIカード ── */
+  #ai-card {
+    width: 100%;
+    max-width: 680px;
+    margin-top: 28px;
+    background: var(--surface);
+    color: var(--ink);
+    border-radius: 4px;
+    padding: 32px 32px 28px;
+    position: relative;
+    box-shadow: 0 8px 40px rgba(0,0,0,.45);
+    transform: translateY(6px);
+    opacity: 0;
+    transition: opacity .6s ease, transform .6s ease;
+  }
+  #ai-card.visible { opacity: 1; transform: translateY(0); }
+
+  .card-eyebrow {
+    font-size: .62rem;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--teal-dim);
+    margin-bottom: 18px;
+  }
+  .card-idea-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.45rem;
+    line-height: 1.4;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+  .card-idea-memo {
+    font-size: .85rem;
+    color: #5a5248;
+    line-height: 1.7;
+    margin-bottom: 20px;
+    white-space: pre-wrap;
+  }
+  .card-divider {
+    border: none;
+    border-top: 1px solid var(--paper-dim);
+    margin: 0 0 18px;
+  }
+  .ai-label {
+    font-size: .6rem;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 8px;
+  }
+  #ai-comment {
+    font-size: .9rem;
+    line-height: 1.8;
+    color: #3d3830;
+    min-height: 1.8em;
+  }
+  .cursor {
+    display: inline-block;
+    width: 1px;
+    height: 1em;
+    background: var(--teal);
+    margin-left: 1px;
+    vertical-align: text-bottom;
+    animation: blink .9s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .card-meta {
+    margin-top: 16px;
+    font-size: .68rem;
+    color: var(--ghost);
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .card-tag {
+    background: var(--paper-dim);
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: .65rem;
+    color: #5a5248;
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .btn-ghost {
+    background: none;
+    border: 1px solid var(--paper-dim);
+    color: #5a5248;
+    padding: 7px 16px;
+    border-radius: 2px;
+    font-size: .75rem;
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: .05em;
+    transition: border-color .2s, color .2s;
+  }
+  .btn-ghost:hover { border-color: var(--teal); color: var(--teal-dim); }
+
+  #no-ideas-msg {
+    width: 100%;
+    max-width: 680px;
+    margin-top: 28px;
+    padding: 24px;
+    border: 1px dashed #3a3550;
+    border-radius: 4px;
+    font-size: .85rem;
+    color: var(--ghost);
+    text-align: center;
+    line-height: 1.8;
+    display: none;
+  }
+
+  /* ── 入力フォーム ── */
+  .input-section {
+    width: 100%;
+    max-width: 680px;
+    margin-top: 32px;
+  }
+  .section-label {
+    font-size: .62rem;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--ghost);
+    margin-bottom: 12px;
+  }
+  .input-title {
+    width: 100%;
+    background: #242040;
+    border: 1px solid #3a3550;
+    border-radius: 3px 3px 0 0;
+    padding: 14px 16px;
+    color: var(--paper);
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.1rem;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .input-title::placeholder { color: #4a4560; }
+  .input-title:focus { border-color: var(--teal); }
+
+  .input-memo {
+    width: 100%;
+    background: #1e1b38;
+    border: 1px solid #3a3550;
+    border-top: none;
+    border-radius: 0;
+    padding: 12px 16px;
+    color: #c8c0b0;
+    font-family: 'Noto Serif JP', serif;
+    font-size: .85rem;
+    font-weight: 300;
+    outline: none;
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.75;
+    transition: border-color .2s;
+  }
+  .input-memo::placeholder { color: #3d3a5a; }
+  .input-memo:focus { border-color: var(--teal); }
+
+  .input-tag {
+    width: 100%;
+    background: #1e1b38;
+    border: 1px solid #3a3550;
+    border-top: none;
+    border-radius: 0 0 3px 3px;
+    padding: 10px 16px;
+    color: #8a8070;
+    font-family: 'DM Mono', monospace;
+    font-size: .78rem;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .input-tag::placeholder { color: #3d3a5a; }
+  .input-tag:focus { border-color: var(--teal); }
+
+  .btn-save {
+    margin-top: 12px;
+    width: 100%;
+    background: var(--teal);
+    border: none;
+    color: #f0ece4;
+    padding: 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: .78rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background .2s;
+  }
+  .btn-save:hover { background: var(--teal-dim); }
+
+  /* ── アーカイブ ── */
+  .archive-section {
+    width: 100%;
+    max-width: 680px;
+    margin-top: 44px;
+  }
+  .archive-toggle {
+    background: none;
+    border: none;
+    color: var(--ghost);
+    font-size: .72rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    font-family: 'DM Mono', monospace;
+    transition: color .2s;
+  }
+  .archive-toggle:hover { color: var(--paper-dim); }
+  .toggle-arrow { transition: transform .3s; display: inline-block; }
+  .toggle-arrow.open { transform: rotate(90deg); }
+
+  #archive-list {
+    margin-top: 16px;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+  }
+  #archive-list.open { display: flex; }
+
+  .archive-item {
+    background: #1e1b38;
+    border: 1px solid #3a3550;
+    border-radius: 3px;
+    padding: 16px 18px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px 12px;
+    align-items: start;
+  }
+  .archive-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: .95rem;
+    color: var(--paper);
+    line-height: 1.4;
+  }
+  .archive-memo {
+    grid-column: 1;
+    font-size: .78rem;
+    color: #7a7262;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    margin-top: 4px;
+  }
+  .archive-meta {
+    font-size: .65rem;
+    color: #4a4560;
+    font-family: 'DM Mono', monospace;
+    white-space: nowrap;
+  }
+  .archive-tags {
+    grid-column: 1;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  .archive-tag {
+    font-size: .6rem;
+    color: #5a6a6b;
+    border: 1px solid #3a4a4b;
+    padding: 1px 7px;
+    border-radius: 2px;
+    font-family: 'DM Mono', monospace;
+  }
+  .btn-del {
+    background: none;
+    border: none;
+    color: #3a3550;
+    cursor: pointer;
+    font-size: .9rem;
+    padding: 0;
+    line-height: 1;
+    transition: color .2s;
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .btn-del:hover { color: #8a6060; }
+
+  /* ── トースト ── */
+  #toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--teal);
+    color: #f0ece4;
+    padding: 10px 24px;
+    border-radius: 3px;
+    font-size: .78rem;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: .08em;
+    opacity: 0;
+    transition: opacity .3s, transform .3s;
+    pointer-events: none;
+    z-index: 999;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── スピナー ── */
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--paper-dim);
+    border-top-color: var(--teal);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">Ginsprout</span>
+  <span class="brand-sub">Idea Catcher</span>
+</header>
+
+<!-- AIピックアップカード -->
+<div id="ai-card" style="display:none">
+  <div class="card-eyebrow">Today's pickup — AI selected</div>
+  <div class="card-idea-title" id="card-title"></div>
+  <div class="card-idea-memo" id="card-memo"></div>
+  <hr class="card-divider">
+  <div class="ai-label">AI comment</div>
+  <div id="ai-comment"></div>
+  <div class="card-meta">
+    <span id="card-date"></span>
+    <span id="card-tags"></span>
+  </div>
+  <div class="card-actions">
+    <button class="btn-ghost" onclick="pickRandom()">▶ 別のアイデアを見る</button>
+    <button class="btn-ghost" onclick="regenComment()">↺ コメントを更新</button>
+  </div>
+</div>
+
+<div id="no-ideas-msg">
+  まだアイデアがありません。<br>最初のひとつを書いてみましょう。
+</div>
+
+<!-- 入力フォーム -->
+<div class="input-section">
+  <div class="section-label">New Idea</div>
+  <input id="inp-title" class="input-title" type="text" placeholder="アイデアのタイトル">
+  <textarea id="inp-memo" class="input-memo" placeholder="メモ（任意）"></textarea>
+  <input id="inp-tag" class="input-tag" type="text" placeholder="タグ：スペース区切り（任意） 例: ツール 小説 デザイン">
+  <button class="btn-save" onclick="saveIdea()">✦ 保存する</button>
+</div>
+
+<!-- アーカイブ -->
+<div class="archive-section">
+  <button class="archive-toggle" onclick="toggleArchive()">
+    <span class="toggle-arrow" id="toggle-arrow">▶</span>
+    <span id="archive-count-label">すべてのアイデア</span>
+  </button>
+  <div id="archive-list"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'ginsprout_ideas_v1';
+
+function loadIdeas() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+function saveIdeas(ideas) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(ideas));
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ── 保存 ── */
+function saveIdea() {
+  const title = document.getElementById('inp-title').value.trim();
+  if (!title) { showToast('タイトルを入力してください'); return; }
+  const memo  = document.getElementById('inp-memo').value.trim();
+  const tagRaw = document.getElementById('inp-tag').value.trim();
+  const tags  = tagRaw ? tagRaw.split(/\s+/).filter(Boolean) : [];
+
+  const ideas = loadIdeas();
+  ideas.unshift({ id: Date.now(), title, memo, tags, createdAt: new Date().toISOString() });
+  saveIdeas(ideas);
+
+  document.getElementById('inp-title').value = '';
+  document.getElementById('inp-memo').value  = '';
+  document.getElementById('inp-tag').value   = '';
+
+  showToast('保存しました');
+  renderAll();
+}
+
+/* ── ランダムピック + AIコメント ── */
+let currentPickId = null;
+
+async function pickRandom(ideaOverride) {
+  const ideas = loadIdeas();
+  if (!ideas.length) {
+    document.getElementById('ai-card').style.display = 'none';
+    document.getElementById('no-ideas-msg').style.display = 'block';
+    return;
+  }
+
+  let idea;
+  if (ideaOverride) {
+    idea = ideaOverride;
+  } else {
+    // 直前と違うものを選ぶ
+    const pool = ideas.length > 1 ? ideas.filter(i => i.id !== currentPickId) : ideas;
+    idea = pool[Math.floor(Math.random() * pool.length)];
+  }
+  currentPickId = idea.id;
+
+  document.getElementById('no-ideas-msg').style.display = 'none';
+  const card = document.getElementById('ai-card');
+  card.style.display = 'block';
+  card.classList.remove('visible');
+  requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('visible')));
+
+  document.getElementById('card-title').textContent = idea.title;
+  document.getElementById('card-memo').textContent  = idea.memo || '';
+  document.getElementById('card-date').textContent  = formatDate(idea.createdAt);
+
+  const tagsEl = document.getElementById('card-tags');
+  tagsEl.innerHTML = idea.tags.map(t => `<span class="card-tag">${t}</span>`).join('');
+
+  await fetchAIComment(idea);
+}
+
+async function regenComment() {
+  const ideas = loadIdeas();
+  const idea  = ideas.find(i => i.id === currentPickId);
+  if (!idea) return;
+  await fetchAIComment(idea);
+}
+
+async function fetchAIComment(idea) {
+  const el = document.getElementById('ai-comment');
+  el.innerHTML = '<span class="spinner"></span>';
+
+  const prompt = `あなたはアイデアの価値を見抜くコンサルタントです。
+以下のアイデアを読み、2〜3文の短いコメントを書いてください。
+コメントのポイント：
+- 現在の技術・デザイン・創作・フリーランス・AI活用などのトレンドと照らし合わせて、このアイデアの今日的な価値や可能性を指摘する
+- または、忘れていたこのアイデアを「今こそ」動かすきっかけになるような視点を提供する
+- 日本語で、知的でドライな語り口で（ゆるすぎず、重すぎず）
+
+アイデアタイトル：${idea.title}
+メモ：${idea.memo || '（なし）'}
+タグ：${idea.tags.join(', ') || '（なし）'}
+記録日：${formatDate(idea.createdAt)}
+
+返答はコメント本文のみ。余計な前置きや「はい」「わかりました」は不要。`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.find(b => b.type === 'text')?.text || 'コメントを取得できませんでした。';
+    typewrite(el, text);
+  } catch (e) {
+    el.textContent = 'AIコメントを取得できませんでした（オフライン？）';
+  }
+}
+
+function typewrite(el, text, i = 0) {
+  if (i === 0) el.innerHTML = '';
+  if (i >= text.length) return;
+  el.innerHTML = text.slice(0, i + 1) + '<span class="cursor"></span>';
+  const delay = text[i] === '。' || text[i] === '、' ? 60 : 18;
+  setTimeout(() => typewrite(el, text, i + 1), delay);
+}
+
+/* ── アーカイブ ── */
+function renderArchive() {
+  const ideas = loadIdeas();
+  const list  = document.getElementById('archive-list');
+  const label = document.getElementById('archive-count-label');
+  label.textContent = `すべてのアイデア（${ideas.length}件）`;
+
+  if (!ideas.length) { list.innerHTML = ''; return; }
+
+  list.innerHTML = ideas.map(idea => `
+    <div class="archive-item" data-id="${idea.id}">
+      <div class="archive-title">${escHtml(idea.title)}</div>
+      <button class="btn-del" onclick="deleteIdea(${idea.id})" title="削除">×</button>
+      ${idea.memo ? `<div class="archive-memo">${escHtml(idea.memo)}</div>` : ''}
+      ${idea.tags.length ? `<div class="archive-tags">${idea.tags.map(t=>`<span class="archive-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
+      <div class="archive-meta" style="grid-column:1">${formatDate(idea.createdAt)}</div>
+    </div>
+  `).join('');
+}
+
+function toggleArchive() {
+  const list  = document.getElementById('archive-list');
+  const arrow = document.getElementById('toggle-arrow');
+  const open  = list.classList.toggle('open');
+  arrow.classList.toggle('open', open);
+}
+
+function deleteIdea(id) {
+  const ideas = loadIdeas().filter(i => i.id !== id);
+  saveIdeas(ideas);
+  showToast('削除しました');
+  renderAll();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderAll() {
+  renderArchive();
+  // ピックアップを更新（カードが見えているなら）
+  const ideas = loadIdeas();
+  if (!ideas.length) {
+    document.getElementById('ai-card').style.display = 'none';
+    document.getElementById('no-ideas-msg').style.display = 'block';
+  } else if (document.getElementById('ai-card').style.display !== 'none') {
+    // カードが表示中なら現在のアイデアが残っているかチェック
+    const current = ideas.find(i => i.id === currentPickId);
+    if (!current) pickRandom();
+  }
+}
+
+/* ── 初期化 ── */
+window.addEventListener('load', () => {
+  renderArchive();
+  pickRandom();
+
+  // Enterキーで保存
+  document.getElementById('inp-title').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('inp-memo').focus();
+    }
+  });
+});
+</script>
+</body>
+</html>
