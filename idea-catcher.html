@@ -534,7 +534,7 @@ async function fetchAIComment(idea) {
 返答はコメント本文のみ。余計な前置きや「はい」「わかりました」は不要。`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://ginsprout-proxy.yumco-taka.workers.dev/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
