@@ -331,19 +331,131 @@
     border-radius: 2px;
     font-family: 'DM Mono', monospace;
   }
-  .btn-del {
+  .archive-btns {
+    grid-row: 1;
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-end;
+  }
+  .btn-del, .btn-edit {
     background: none;
     border: none;
-    color: #3a3550;
     cursor: pointer;
-    font-size: .9rem;
+    font-size: .75rem;
     padding: 0;
     line-height: 1;
     transition: color .2s;
-    grid-row: 1;
-    grid-column: 2;
+    font-family: 'DM Mono', monospace;
   }
-  .btn-del:hover { color: #8a6060; }
+  .btn-del  { color: #3a3550; }
+  .btn-del:hover  { color: #8a6060; }
+  .btn-edit { color: #3a4a5a; }
+  .btn-edit:hover { color: var(--teal); }
+
+  /* ── 編集モーダル ── */
+  #edit-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,20,.75);
+    z-index: 900;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #edit-modal.show { display: flex; }
+  .modal-box {
+    background: #1e1b38;
+    border: 1px solid #3a3550;
+    border-radius: 6px;
+    padding: 28px 24px;
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .modal-label {
+    font-size: .62rem;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--ghost);
+    margin-bottom: 2px;
+  }
+  .modal-title-input {
+    width: 100%;
+    background: #242040;
+    border: 1px solid #3a3550;
+    border-radius: 3px;
+    padding: 12px 14px;
+    color: var(--paper);
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.05rem;
+    outline: none;
+  }
+  .modal-title-input:focus { border-color: var(--teal); }
+  .modal-memo-input {
+    width: 100%;
+    background: #1a1835;
+    border: 1px solid #3a3550;
+    border-radius: 3px;
+    padding: 10px 14px;
+    color: #c8c0b0;
+    font-family: 'Noto Serif JP', serif;
+    font-size: .85rem;
+    font-weight: 300;
+    outline: none;
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.75;
+  }
+  .modal-memo-input:focus { border-color: var(--teal); }
+  .modal-tag-input {
+    width: 100%;
+    background: #1a1835;
+    border: 1px solid #3a3550;
+    border-radius: 3px;
+    padding: 8px 14px;
+    color: #8a8070;
+    font-family: 'DM Mono', monospace;
+    font-size: .78rem;
+    outline: none;
+  }
+  .modal-tag-input:focus { border-color: var(--teal); }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .btn-modal-save {
+    flex: 1;
+    background: var(--teal);
+    border: none;
+    color: #f0ece4;
+    padding: 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: .75rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background .2s;
+  }
+  .btn-modal-save:hover { background: var(--teal-dim); }
+  .btn-modal-cancel {
+    background: none;
+    border: 1px solid #3a3550;
+    color: var(--ghost);
+    padding: 12px 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: .75rem;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: border-color .2s, color .2s;
+  }
+  .btn-modal-cancel:hover { border-color: var(--ghost); color: var(--paper-dim); }
 
   /* ── トースト ── */
   #toast {
@@ -424,6 +536,20 @@
     <span id="archive-count-label">すべてのアイデア</span>
   </button>
   <div id="archive-list"></div>
+</div>
+
+<!-- 編集モーダル -->
+<div id="edit-modal">
+  <div class="modal-box">
+    <div class="modal-label">Edit Idea</div>
+    <input id="edit-title" class="modal-title-input" type="text" placeholder="タイトル">
+    <textarea id="edit-memo" class="modal-memo-input" placeholder="メモ（任意）"></textarea>
+    <input id="edit-tag" class="modal-tag-input" type="text" placeholder="タグ：スペース区切り">
+    <div class="modal-actions">
+      <button class="btn-modal-save" onclick="saveEdit()">✦ 保存する</button>
+      <button class="btn-modal-cancel" onclick="closeModal()">キャンセル</button>
+    </div>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -571,7 +697,10 @@ function renderArchive() {
   list.innerHTML = ideas.map(idea => `
     <div class="archive-item" data-id="${idea.id}">
       <div class="archive-title">${escHtml(idea.title)}</div>
-      <button class="btn-del" onclick="deleteIdea(${idea.id})" title="削除">×</button>
+      <div class="archive-btns">
+        <button class="btn-edit" onclick="openEdit(${idea.id})" title="編集">✎ 編集</button>
+        <button class="btn-del"  onclick="deleteIdea(${idea.id})" title="削除">× 削除</button>
+      </div>
       ${idea.memo ? `<div class="archive-memo">${escHtml(idea.memo)}</div>` : ''}
       ${idea.tags.length ? `<div class="archive-tags">${idea.tags.map(t=>`<span class="archive-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
       <div class="archive-meta" style="grid-column:1">${formatDate(idea.createdAt)}</div>
@@ -590,6 +719,40 @@ function deleteIdea(id) {
   const ideas = loadIdeas().filter(i => i.id !== id);
   saveIdeas(ideas);
   showToast('削除しました');
+  renderAll();
+}
+
+/* ── 編集モーダル ── */
+let editingId = null;
+
+function openEdit(id) {
+  const idea = loadIdeas().find(i => i.id === id);
+  if (!idea) return;
+  editingId = id;
+  document.getElementById('edit-title').value = idea.title;
+  document.getElementById('edit-memo').value  = idea.memo || '';
+  document.getElementById('edit-tag').value   = idea.tags.join(' ');
+  document.getElementById('edit-modal').classList.add('show');
+  document.getElementById('edit-title').focus();
+}
+
+function closeModal() {
+  document.getElementById('edit-modal').classList.remove('show');
+  editingId = null;
+}
+
+function saveEdit() {
+  const title = document.getElementById('edit-title').value.trim();
+  if (!title) { showToast('タイトルを入力してください'); return; }
+  const memo   = document.getElementById('edit-memo').value.trim();
+  const tagRaw = document.getElementById('edit-tag').value.trim();
+  const tags   = tagRaw ? tagRaw.split(/\s+/).filter(Boolean) : [];
+  const ideas = loadIdeas().map(i =>
+    i.id === editingId ? { ...i, title, memo, tags } : i
+  );
+  saveIdeas(ideas);
+  closeModal();
+  showToast('更新しました');
   renderAll();
 }
 
@@ -617,6 +780,11 @@ window.addEventListener('load', () => {
   pickRandom();
 
   // Enterキーで保存
+  // モーダル背景クリックで閉じる
+  document.getElementById('edit-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('edit-modal')) closeModal();
+  });
+
   document.getElementById('inp-title').addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
