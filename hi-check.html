@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hiチェック – Ginsprout</title>
+<style>
+  :root {
+    --bg: #f5f4f8;
+    --surface: #ffffff;
+    --border: #dcdae6;
+    --accent: #6c5ce7;
+    --accent-dim: #a29bfe;
+    --text: #2d2b3d;
+    --muted: #9590aa;
+    --success: #00b894;
+    --error: #d63031;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100dvh;
+    padding: 16px;
+  }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+  }
+  header span {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .settings-toggle {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: auto;
+    font-family: inherit;
+  }
+  .settings-toggle:hover { color: var(--text); border-color: var(--accent); }
+
+  .settings-panel {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+  .settings-panel.open { display: block; }
+  .settings-panel label {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+    padding: 12px;
+    resize: vertical;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  #system-prompt { height: 100px; font-size: 13px; }
+  #input-text { height: 200px; }
+  #extra-instruction { height: 60px; font-size: 14px; }
+
+  .section-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .input-section { margin-bottom: 14px; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: none;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    padding: 12px 20px;
+    letter-spacing: 0.03em;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    width: 100%;
+    font-size: 15px;
+    padding: 14px;
+  }
+  .btn-primary:hover { background: #7d6ff0; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-secondary {
+    background: var(--surface);
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    width: 100%;
+    font-size: 14px;
+    padding: 12px;
+    margin-top: 10px;
+  }
+  .btn-secondary:hover { background: #f0eeff; }
+  .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-copy {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 100%;
+    margin-top: 10px;
+    padding: 12px;
+  }
+  .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-copy.copied { border-color: var(--success); color: var(--success); }
+
+  .btn-clear {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-clear:hover { color: var(--error); border-color: var(--error); }
+
+  .input-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .char-count { font-size: 12px; color: var(--muted); }
+
+  .result-section { margin-top: 20px; display: none; }
+  .result-section.visible { display: block; }
+
+  .result-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    min-height: 80px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 14px;
+    line-height: 1.8;
+  }
+
+  /* 追加指示エリア */
+  .refine-section {
+    margin-top: 16px;
+    display: none;
+    background: #f0eeff;
+    border: 1px solid var(--accent-dim);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .refine-section.visible { display: block; }
+  .refine-section .section-label { color: var(--accent); }
+
+  .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background: var(--accent);
+    margin-left: 2px;
+    vertical-align: middle;
+    animation: blink 0.8s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .error-msg {
+    color: var(--error);
+    font-size: 13px;
+    margin-top: 8px;
+    display: none;
+  }
+  .error-msg.visible { display: block; }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 20px 0;
+  }
+
+  .status-bar {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 6px;
+    min-height: 18px;
+  }
+
+  /* 履歴バッジ */
+  .history-badge {
+    display: inline-block;
+    background: var(--accent-dim);
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Hiチェック</h1>
+  <span>整文 + ChatGPT送り</span>
+  <button class="settings-toggle" id="settings-toggle">⚙ 設定</button>
+</header>
+
+<div class="settings-panel" id="settings-panel">
+  <label>整文 システムプロンプト（カスタマイズ可）</label>
+  <textarea id="system-prompt">あなたは小説の文章整理を行うアシスタントです。
+入力された小説の文章を、以下の方針で「整文」してください。
+
+・文体・語調・人称・視点は原文のまま保持する
+・読みにくい部分を自然に整える（冗長な繰り返し・接続の不自然さなど）
+・表現を豊かにするが、原文のニュアンスや感情を損なわない
+・文章の長さは原文から大きく変えない
+・ルビ・括弧・会話文の書式は原文に倣う
+
+整文した文章のみを出力してください。説明や注釈は不要です。</textarea>
+</div>
+
+<div class="input-section">
+  <div class="section-label">原文（Notionからペースト）</div>
+  <textarea id="input-text" placeholder="ここに文章を貼り付けてください"></textarea>
+  <div class="input-controls">
+    <span class="char-count" id="char-count">0文字</span>
+    <button class="btn-clear" id="btn-clear">クリア</button>
+  </div>
+</div>
+
+<button class="btn btn-primary" id="btn-seibun" disabled>整文する</button>
+<div class="status-bar" id="status-bar"></div>
+<div class="error-msg" id="error-msg"></div>
+
+<!-- 結果 -->
+<div class="result-section" id="result-section">
+  <hr class="divider">
+  <div class="section-label">整文結果</div>
+  <div class="result-box" id="result-box"></div>
+
+  <!-- 追加指示エリア -->
+  <div class="refine-section" id="refine-section">
+    <div class="section-label">追加指示 <span class="history-badge" id="history-badge"></span></div>
+    <textarea id="extra-instruction" placeholder="例：もう少し表現豊かに　／　この部分の語調を柔らかく　／　戦場の緊張感をもっと出して"></textarea>
+    <button class="btn btn-secondary" id="btn-refine">この指示で再整文</button>
+  </div>
+
+  <button class="btn btn-copy" id="btn-copy">📋 整文結果をコピー（ChatGPTへ）</button>
+</div>
+
+<script>
+  const settingsToggle = document.getElementById('settings-toggle');
+  const settingsPanel = document.getElementById('settings-panel');
+  settingsToggle.addEventListener('click', () => settingsPanel.classList.toggle('open'));
+
+  const inputText = document.getElementById('input-text');
+  const charCount = document.getElementById('char-count');
+  const btnSeibun = document.getElementById('btn-seibun');
+  const btnRefine = document.getElementById('btn-refine');
+  const btnClear = document.getElementById('btn-clear');
+  const btnCopy = document.getElementById('btn-copy');
+  const resultSection = document.getElementById('result-section');
+  const refineSection = document.getElementById('refine-section');
+  const resultBox = document.getElementById('result-box');
+  const statusBar = document.getElementById('status-bar');
+  const errorMsg = document.getElementById('error-msg');
+  const systemPrompt = document.getElementById('system-prompt');
+  const extraInstruction = document.getElementById('extra-instruction');
+  const historyBadge = document.getElementById('history-badge');
+
+  // 会話履歴（原文→整文→追加指示→再整文…）
+  let messages = [];
+  let refineCount = 0;
+
+  inputText.addEventListener('input', () => {
+    const len = inputText.value.length;
+    charCount.textContent = len.toLocaleString() + '文字';
+    btnSeibun.disabled = len === 0;
+  });
+
+  btnClear.addEventListener('click', () => {
+    inputText.value = '';
+    charCount.textContent = '0文字';
+    btnSeibun.disabled = true;
+    resultSection.classList.remove('visible');
+    refineSection.classList.remove('visible');
+    errorMsg.classList.remove('visible');
+    statusBar.textContent = '';
+    messages = [];
+    refineCount = 0;
+    extraInstruction.value = '';
+    historyBadge.textContent = '';
+  });
+
+  // ストリーミング共通処理
+  async function callAPI(msgs) {
+    resultBox.textContent = '';
+    resultBox.classList.remove('loading');
+    errorMsg.classList.remove('visible');
+    statusBar.textContent = '';
+    resultSection.classList.add('visible');
+
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    resultBox.appendChild(cursor);
+
+    let fullText = '';
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 3000,
+        stream: true,
+        system: systemPrompt.value.trim(),
+        messages: msgs
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || 'APIエラー');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      for (const line of chunk.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+        try {
+          const json = JSON.parse(data);
+          const delta = json.delta?.text || '';
+          if (delta) {
+            fullText += delta;
+            resultBox.textContent = fullText;
+            resultBox.appendChild(cursor);
+          }
+        } catch {}
+      }
+    }
+
+    cursor.remove();
+    resultBox.textContent = fullText;
+    return fullText;
+  }
+
+  // 初回整文
+  btnSeibun.addEventListener('click', async () => {
+    const text = inputText.value.trim();
+    if (!text) return;
+
+    btnSeibun.disabled = true;
+    btnSeibun.textContent = '処理中…';
+    refineSection.classList.remove('visible');
+    messages = [];
+    refineCount = 0;
+    extraInstruction.value = '';
+    historyBadge.textContent = '';
+
+    try {
+      messages.push({ role: 'user', content: text });
+      const result = await callAPI(messages);
+      messages.push({ role: 'assistant', content: result });
+      statusBar.textContent = `完了 · ${result.length.toLocaleString()}文字`;
+      refineSection.classList.add('visible');
+    } catch (err) {
+      errorMsg.textContent = 'エラー：' + err.message;
+      errorMsg.classList.add('visible');
+    } finally {
+      btnSeibun.disabled = inputText.value.trim() === '';
+      btnSeibun.textContent = '整文する';
+    }
+  });
+
+  // 追加指示で再整文
+  btnRefine.addEventListener('click', async () => {
+    const instruction = extraInstruction.value.trim();
+    if (!instruction) return;
+
+    btnRefine.disabled = true;
+    btnRefine.textContent = '処理中…';
+
+    try {
+      messages.push({ role: 'user', content: instruction });
+      const result = await callAPI(messages);
+      messages.push({ role: 'assistant', content: result });
+      refineCount++;
+      historyBadge.textContent = `${refineCount}回調整済`;
+      statusBar.textContent = `再整文完了 · ${result.length.toLocaleString()}文字`;
+      extraInstruction.value = '';
+    } catch (err) {
+      errorMsg.textContent = 'エラー：' + err.message;
+      errorMsg.classList.add('visible');
+    } finally {
+      btnRefine.disabled = false;
+      btnRefine.textContent = 'この指示で再整文';
+    }
+  });
+
+  // コピー
+  btnCopy.addEventListener('click', async () => {
+    const text = resultBox.textContent;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    btnCopy.textContent = '✅ コピーしました！';
+    btnCopy.classList.add('copied');
+    setTimeout(() => {
+      btnCopy.textContent = '📋 整文結果をコピー（ChatGPTへ）';
+      btnCopy.classList.remove('copied');
+    }, 2000);
+  });
+</script>
+</body>
+</html>
