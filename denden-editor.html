@@ -398,6 +398,17 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="handoffModalBackdrop">
+  <div class="modal">
+    <h2>変換ツールからの原稿があります</h2>
+    <p style="font-size:13px; color:var(--ink-soft); margin: 0 0 16px;">読み込むと、現在編集中の内容は上書きされます。よろしいですか？</p>
+    <div class="modal-actions">
+      <button id="handoffSkip">今は使わない</button>
+      <button id="handoffLoad">読み込む</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const editor = document.getElementById('editor');
 const toolbar = document.getElementById('toolbar');
@@ -407,8 +418,29 @@ const previewInner = document.getElementById('previewInner');
 
 const CONTENT_KEY = 'content';
 const BUTTONS_KEY = 'custom-buttons';
+const HANDOFF_KEY = 'denden-handoff'; // 変換ツールから渡された原稿の受け取り用
 let saveTimer = null;
 let previewTimer = null;
+
+/* Claudeのアーティファクト内ではwindow.storageを、実際にデプロイした
+   GitHub Pages等ではlocalStorageを使う、両対応のストレージ。 */
+const storage = {
+  async get(key){
+    if(window.storage){
+      try{ return await window.storage.get(key, false); }catch(e){}
+    }
+    try{
+      const v = localStorage.getItem('denden-editor:' + key);
+      return v !== null ? { value: v } : null;
+    }catch(e){ return null; }
+  },
+  async set(key, value){
+    if(window.storage){
+      try{ return await window.storage.set(key, value, false); }catch(e){}
+    }
+    try{ localStorage.setItem('denden-editor:' + key, value); return { key, value }; }catch(e){ return null; }
+  }
+};
 
 function showToast(msg){
   toast.textContent = msg;
@@ -423,7 +455,7 @@ function updateCount(){
 function scheduleSave(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async ()=>{
-    try{ await window.storage.set(CONTENT_KEY, editor.value, false); }catch(e){}
+    try{ await storage.set(CONTENT_KEY, editor.value); }catch(e){}
   }, 700);
 }
 
@@ -724,12 +756,12 @@ toolbar.addEventListener('click', (e)=>{
 /* ===== カスタムボタン ===== */
 async function loadCustomButtons(){
   try{
-    const result = await window.storage.get(BUTTONS_KEY, false);
+    const result = await storage.get(BUTTONS_KEY);
     return result ? JSON.parse(result.value) : [];
   }catch(e){ return []; }
 }
 async function saveCustomButtons(list){
-  try{ await window.storage.set(BUTTONS_KEY, JSON.stringify(list), false); }catch(e){}
+  try{ await storage.set(BUTTONS_KEY, JSON.stringify(list)); }catch(e){}
 }
 function renderCustomButton(item, index){
   const group = document.createElement('span');
@@ -871,10 +903,31 @@ document.querySelectorAll('.tab').forEach(tab=>{
   });
 });
 
-/* ===== 初期化（前回の続きを復元） ===== */
+/* ===== 初期化（前回の続きを復元／変換ツールからの引き継ぎ確認） ===== */
+async function checkHandoff(){
+  let handoffText = null;
+  try{ handoffText = localStorage.getItem(HANDOFF_KEY); }catch(e){}
+  if(!handoffText) return;
+
+  const backdrop = document.getElementById('handoffModalBackdrop');
+  backdrop.classList.add('show');
+
+  const cleanup = ()=>{
+    try{ localStorage.removeItem(HANDOFF_KEY); }catch(e){}
+    backdrop.classList.remove('show');
+  };
+  document.getElementById('handoffLoad').onclick = ()=>{
+    editor.value = handoffText;
+    updateCount(); scheduleSave(); schedulePreview();
+    cleanup();
+    showToast('変換ツールの原稿を読み込みました');
+  };
+  document.getElementById('handoffSkip').onclick = cleanup;
+}
+
 async function init(){
   try{
-    const saved = await window.storage.get(CONTENT_KEY, false);
+    const saved = await storage.get(CONTENT_KEY);
     if(saved && saved.value){
       editor.value = saved.value;
       showToast('前回の続きを読み込みました');
@@ -882,6 +935,7 @@ async function init(){
   }catch(e){}
   updateCount();
   refreshCustomButtons();
+  await checkHandoff();
 }
 init();
 </script>

@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>でんでん記法 変換ツール</title>
+
+<!-- ── Favicon（画像ファイルを使わない、HTML埋め込み型） ── -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='31' fill='%23f7f3ea' stroke='%23d8cfb9' stroke-width='1.5'/%3E%3Cpath d='M20 20 L34 20 L34 26 L26 26 L26 44 L20 44 Z' fill='%232c3e54'/%3E%3Cpath d='M30 30 L44 30 L44 36 L36 36 L36 44 L30 44 Z' fill='%23b5462f'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23f7f3ea'/%3E%3Cpath d='M20 20 L34 20 L34 26 L26 26 L26 44 L20 44 Z' fill='%232c3e54'/%3E%3Cpath d='M30 30 L44 30 L44 36 L36 36 L36 44 L30 44 Z' fill='%23b5462f'/%3E%3C/svg%3E">
+<meta name="apple-mobile-web-app-title" content="でんでん変換">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2c3e54">
+
+<style>
+  :root{
+    --paper: #f7f3ea;
+    --ink: #2b2a28;
+    --ink-soft: #5c5850;
+    --indigo: #2c3e54;
+    --indigo-deep: #1c2a3a;
+    --vermillion: #b5462f;
+    --vermillion-soft: #d9a896;
+    --line: #d8cfb9;
+    --warn-bg: #fbf1df;
+    --warn-line: #e0c896;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; }
+  body{
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .wrap{ max-width: 920px; margin: 0 auto; padding: 16px 14px 60px; }
+  header{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 16px;
+  }
+  h1{
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin: 0 0 4px;
+    color: var(--indigo-deep);
+  }
+  .lead{
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    line-height: 1.7;
+  }
+
+  section{ margin-bottom: 22px; }
+  h2{
+    font-size: 13px;
+    color: var(--indigo-deep);
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    margin: 0 0 10px;
+    letter-spacing: 0.03em;
+  }
+
+  .dropzone{
+    border: 1.5px dashed var(--line);
+    border-radius: 6px;
+    background: #fffdf8;
+    padding: 22px 14px;
+    text-align: center;
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .file-input-btn{
+    display:inline-block;
+    margin-top: 10px;
+    border: 1px solid var(--indigo);
+    color: var(--indigo-deep);
+    background: #fff;
+    padding: 10px 18px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  input[type="file"]{ display:none; }
+
+  ul.file-list{ list-style: none; margin: 14px 0 0; padding: 0; }
+  ul.file-list li{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    background: #fffdf8;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 9px 10px;
+    margin-bottom: 7px;
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    font-size: 12.5px;
+  }
+  ul.file-list .order{
+    color: var(--ink-soft);
+    width: 1.6em;
+    flex-shrink:0;
+    text-align:right;
+  }
+  ul.file-list .name{
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  ul.file-list .title{
+    color: var(--ink-soft);
+    font-size: 11px;
+    display:block;
+  }
+  ul.file-list button{
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink-soft);
+    border-radius: 3px;
+    padding: 6px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink:0;
+  }
+  ul.file-list button.remove{ color: var(--vermillion); border-color: var(--vermillion-soft); }
+
+  .actions-row{ display:flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  button.primary{
+    border: 1px solid var(--indigo);
+    background: var(--indigo);
+    color: #fff;
+    padding: 11px 18px;
+    border-radius: 4px;
+    font-size: 13.5px;
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    cursor: pointer;
+  }
+  button.secondary{
+    border: 1px solid var(--indigo);
+    background: #fff;
+    color: var(--indigo-deep);
+    padding: 11px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    cursor: pointer;
+  }
+
+  .summary{
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    margin-bottom: 8px;
+  }
+
+  textarea{
+    width: 100%;
+    min-height: 40vh;
+    padding: 16px;
+    font-size: 15px;
+    line-height: 1.85;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+    color: var(--ink);
+    background: #fffdf8;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    resize: vertical;
+  }
+  textarea:focus{ outline:none; border-color: var(--indigo); }
+
+  .warnings{
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-line);
+    border-radius: 4px;
+    padding: 12px 14px;
+    font-size: 12px;
+    color: #6b5a30;
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    line-height: 1.8;
+    margin-top: 10px;
+  }
+  .warnings strong{ display:block; margin-bottom: 4px; }
+
+  .toast{
+    position: fixed;
+    bottom: 18px; left: 50%;
+    transform: translate(-50%, 8px);
+    background: var(--indigo-deep);
+    color: #fff;
+    padding: 9px 18px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 60;
+  }
+  .toast.show{ opacity: 1; transform: translate(-50%, 0); }
+
+  .empty-state{
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    text-align:center;
+    padding: 30px 10px;
+  }
+
+  @media (max-width: 480px){
+    h1{ font-size: 15px; }
+    button.primary, button.secondary{ font-size: 12.5px; padding: 10px 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>でんでん記法 変換ツール</h1>
+    <p class="lead">Notionからエクスポートしたmdファイル（複数話）をまとめて読み込み、見出しの変換と話間の改ページ挿入を行って、1つのでんでん原稿に結合します。</p>
+    <p class="lead" style="margin-top:6px;">※「1行あけ」をしたい箇所は、Notionの空の段落（Enter2回）ではなく「区切り線（Divider）」ブロックを使ってください。空段落は書き出し時に消えてしまいますが、区切り線は <code>---</code> として残るため、自動で「1行あけ」に変換できます。</p>
+  </header>
+
+  <section>
+    <h2>① ファイルを選ぶ</h2>
+    <div class="dropzone">
+      mdファイルを複数選択してください（話数の順に並べ替えできます）
+      <br>
+      <label class="file-input-btn" for="fileInput">ファイルを選ぶ</label>
+      <input type="file" id="fileInput" accept=".md,.txt" multiple>
+    </div>
+    <ul class="file-list" id="fileList"></ul>
+  </section>
+
+  <section id="resultSection" style="display:none;">
+    <h2>② 結合結果（このまま編集できます）</h2>
+    <p class="summary" id="summaryText"></p>
+    <textarea id="output" spellcheck="false"></textarea>
+    <div id="warningsBox"></div>
+    <div class="actions-row">
+      <button class="secondary" id="copyBtn">全文コピー</button>
+      <button class="secondary" id="shareBtn">共有</button>
+      <a href="denden-editor.html" id="openEditorLink" style="text-decoration:none;">
+        <button class="primary" id="openEditorBtn">編集ツールで開く</button>
+      </a>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const fileListEl = document.getElementById('fileList');
+const resultSection = document.getElementById('resultSection');
+const output = document.getElementById('output');
+const summaryText = document.getElementById('summaryText');
+const warningsBox = document.getElementById('warningsBox');
+const toast = document.getElementById('toast');
+
+let files = []; // { name, text }
+
+function showToast(msg){
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(()=> toast.classList.remove('show'), 1700);
+}
+
+/* ===== ファイル読み込み ===== */
+fileInput.addEventListener('change', async (e)=>{
+  const picked = Array.from(e.target.files || []);
+  for(const f of picked){
+    try{
+      const text = await f.text();
+      files.push({ name: f.name, text });
+    }catch(err){
+      showToast(f.name + ' の読み込みに失敗しました');
+    }
+  }
+  files.sort((a,b)=> a.name.localeCompare(b.name, 'ja'));
+  renderFileList();
+  fileInput.value = '';
+});
+
+function extractTitleAndBody(text){
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  let idx = 0;
+  while(idx < lines.length && lines[idx].trim() === ''){ idx++; }
+  let title = '';
+  if(idx < lines.length && /^#+\s*/.test(lines[idx])){
+    title = lines[idx].replace(/^#+\s*/, '').trim();
+    idx++;
+  }
+  while(idx < lines.length && lines[idx].trim() === ''){ idx++; }
+  let body = lines.slice(idx).join('\n');
+  body = body.replace(/\n{3,}/g, '\n\n');   // 3行以上の空行を1行に整理
+  body = body.replace(/[ \t]+$/gm, '');     // 行末の余分な空白を削除
+  body = body.trim();
+  return { title, body };
+}
+
+function renderFileList(){
+  fileListEl.innerHTML = '';
+  files.forEach((f, i)=>{
+    const { title } = extractTitleAndBody(f.text);
+    const li = document.createElement('li');
+
+    const order = document.createElement('span');
+    order.className = 'order';
+    order.textContent = (i+1) + '.';
+
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.innerHTML = escapeHtml(f.name) + (title ? '<span class="title">→ ' + escapeHtml(title) + '</span>' : '<span class="title">（見出し未検出）</span>');
+
+    const up = document.createElement('button');
+    up.textContent = '↑';
+    up.disabled = i === 0;
+    up.addEventListener('click', ()=>{ moveFile(i, -1); });
+
+    const down = document.createElement('button');
+    down.textContent = '↓';
+    down.disabled = i === files.length - 1;
+    down.addEventListener('click', ()=>{ moveFile(i, 1); });
+
+    const remove = document.createElement('button');
+    remove.textContent = '✕';
+    remove.className = 'remove';
+    remove.addEventListener('click', ()=>{ files.splice(i,1); renderFileList(); });
+
+    li.appendChild(order);
+    li.appendChild(name);
+    li.appendChild(up);
+    li.appendChild(down);
+    li.appendChild(remove);
+    fileListEl.appendChild(li);
+  });
+
+  // ファイルがあれば変換ボタンを表示
+  let convertRow = document.getElementById('convertRow');
+  if(files.length > 0){
+    if(!convertRow){
+      convertRow = document.createElement('div');
+      convertRow.id = 'convertRow';
+      convertRow.className = 'actions-row';
+      convertRow.innerHTML = '<button class="primary" id="convertBtn">この順番で変換する</button>';
+      fileListEl.insertAdjacentElement('afterend', convertRow);
+      document.getElementById('convertBtn').addEventListener('click', runConvert);
+    }
+  } else if(convertRow){
+    convertRow.remove();
+    resultSection.style.display = 'none';
+  }
+}
+
+function moveFile(index, dir){
+  const target = index + dir;
+  if(target < 0 || target >= files.length) return;
+  [files[index], files[target]] = [files[target], files[index]];
+  renderFileList();
+}
+
+function escapeHtml(str){
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ===== 変換処理 ===== */
+function convertDividerLines(body, label, notices){
+  const lines = body.split('\n');
+  const converted = lines.map((line, i)=>{
+    if(/^[-*_]{3,}\s*$/.test(line.trim())){
+      notices.push('「' + label + '」の' + (i+1) + '行目の区切り線（' + line.trim() + '）を「1行あけ」に変換しました。');
+      return '<p><br /></p>';
+    }
+    return line;
+  });
+  return converted.join('\n');
+}
+
+function detectWarnings(body, label, warnings){
+  const lines = body.split('\n');
+  lines.forEach((line, i)=>{
+    if(/^[＝]{3,}\s*$/.test(line.trim())){
+      warnings.push('「' + label + '」の' + (i+1) + '行目：全角の「＝」が並んでいます。改ページとして認識されるのは半角の「=」のみです。');
+    }
+  });
+}
+
+function runConvert(){
+  const warnings = [];
+  const notices = [];
+  const parts = files.map((f, i)=>{
+    const { title, body: rawBody } = extractTitleAndBody(f.text);
+    const body = convertDividerLines(rawBody, f.name, notices);
+    detectWarnings(body, f.name, warnings);
+    const fallbackTitle = f.name.replace(/\.[^.]+$/, '');
+    const headingLine = '## ' + (title || fallbackTitle);
+    return headingLine + '\n\n' + body;
+  });
+  const combined = parts.join('\n\n==============\n\n');
+
+  output.value = combined;
+  summaryText.textContent = files.length + '話を結合しました（' + combined.length + '文字）。話の間には改ページ記号を自動で入れています。';
+
+  let noticeHtml = '';
+  if(notices.length > 0){
+    noticeHtml += '<div class="warnings" style="background:#eef3ec;border-color:#cfe0c6;color:#3f6a44;"><strong>✓ 区切り線を「1行あけ」に変換しました</strong>' + notices.map(n=>'・'+escapeHtml(n)).join('<br>') + '</div>';
+  }
+  if(warnings.length > 0){
+    noticeHtml += '<div class="warnings"><strong>⚠ ご確認ください</strong>' + warnings.map(w=>'・'+escapeHtml(w)).join('<br>') + '</div>';
+  }
+  warningsBox.innerHTML = noticeHtml;
+
+  resultSection.style.display = 'block';
+  resultSection.scrollIntoView({ behavior:'smooth', block:'start' });
+
+  // 同一ドメインにデプロイした場合、編集ツールへワンタップで引き継げるようにする
+  try{ localStorage.setItem('denden-handoff', combined); }catch(e){}
+}
+
+/* ===== 出力後の操作 ===== */
+document.getElementById('copyBtn').addEventListener('click', async ()=>{
+  try{ await navigator.clipboard.writeText(output.value); showToast('コピーしました'); }
+  catch(e){ output.select(); document.execCommand('copy'); showToast('コピーしました'); }
+});
+
+document.getElementById('shareBtn').addEventListener('click', async ()=>{
+  const text = output.value;
+  if(!text){ showToast('結果がありません'); return; }
+  try{
+    if(navigator.canShare && navigator.share){
+      const file = new File([text], 'manuscript.txt', { type: 'text/plain' });
+      if(navigator.canShare({ files: [file] })){
+        await navigator.share({ files: [file], title: 'manuscript.txt' });
+        showToast('共有しました');
+        return;
+      }
+    }
+  }catch(err){
+    if(err && err.name === 'AbortError'){ return; }
+  }
+  try{ await navigator.clipboard.writeText(text); showToast('共有できない環境のため、コピーしました'); }
+  catch(err){ showToast('共有に失敗しました。「全文コピー」をお試しください'); }
+});
+
+// 「編集ツールで開く」：同一ドメイン上では自動でlocalStorage経由で引き継がれる。
+// それ以外（このプレビュー環境など）では、念のためクリップボードにもコピーしておく。
+document.getElementById('openEditorBtn').addEventListener('click', async (e)=>{
+  try{
+    localStorage.setItem('denden-handoff', output.value);
+  }catch(err){}
+  try{ await navigator.clipboard.writeText(output.value); }catch(err){}
+});
+</script>
+</body>
+</html>
