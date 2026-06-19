@@ -220,7 +220,7 @@
     <h1>でんでん記法 変換ツール</h1>
     <p class="lead">Notionからエクスポートしたmdファイル（複数話）をまとめて読み込み、見出しの変換と話間の改ページ挿入を行って、1つのでんでん原稿に結合します。</p>
     <p class="lead" style="margin-top:6px;">※「1行あけ」をしたい箇所は、Notionの空の段落（Enter2回）ではなく「区切り線（Divider）」ブロックを使ってください。空段落は書き出し時に消えてしまいますが、区切り線は <code>---</code> として残るため、自動で「1行あけ」に変換できます。</p>
-    <p class="lead" style="margin-top:6px;">※「!?」「!!」などの記号の連続や、見出しの「【II-001】」のような話数表記は、変換時に自動で縦中横に変換されます。</p>
+    <p class="lead" style="margin-top:6px;">※「!?」「!!」などの記号の連続や、見出しの「【II-001】」のような話数表記は、変換時に自動で縦中横に変換されます。見出し直後の段落の字下げ（全角スペース）が消えている場合も、自動で補います。</p>
   </header>
 
   <section>
@@ -283,6 +283,19 @@ fileInput.addEventListener('change', async (e)=>{
   renderFileList();
   fileInput.value = '';
 });
+
+function ensureFirstLineIndent(body, counterRef){
+  const lines = body.split('\n');
+  if(lines.length === 0 || lines[0].length === 0) return body;
+  const first = lines[0];
+  // すでに字下げ済み、または台詞・カッコ書きなど字下げ不要な書き出しはそのままにする
+  const skipChars = ['　', '「', '『', '（', '(', '【', '〈', '《'];
+  if(!skipChars.includes(first[0])){
+    lines[0] = '　' + first;
+    counterRef.count++;
+  }
+  return lines.join('\n');
+}
 
 function extractTitleAndBody(text){
   const lines = text.replace(/\r\n/g, '\n').split('\n');
@@ -414,9 +427,11 @@ function runConvert(){
   const warnings = [];
   const notices = [];
   const headingCounter = { count: 0 };
+  const indentCounter = { count: 0 };
   const parts = files.map((f, i)=>{
     const { title, body: rawBody } = extractTitleAndBody(f.text);
-    const body = convertDividerLines(rawBody, f.name, notices);
+    let body = ensureFirstLineIndent(rawBody, indentCounter);
+    body = convertDividerLines(body, f.name, notices);
     detectWarnings(body, f.name, warnings);
     const fallbackTitle = f.name.replace(/\.[^.]+$/, '');
     const rawTitle = title || fallbackTitle;
@@ -425,6 +440,9 @@ function runConvert(){
   });
   let combined = parts.join('\n\n==============\n\n');
 
+  if(indentCounter.count > 0){
+    notices.push('見出し直後の段落' + indentCounter.count + '件に、字下げ（全角スペース）を補いました。');
+  }
   if(headingCounter.count > 0){
     notices.push('見出しの話数表記（【II-001】など）' + headingCounter.count + '件の英字・数字部分を縦中横に変換しました。');
   }
