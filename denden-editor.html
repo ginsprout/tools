@@ -352,6 +352,7 @@
       <div class="actions">
         <button id="copyBtn">全文コピー</button>
         <button id="downloadBtn">共有</button>
+        <button id="batchTcyBtn">！？を一括変換</button>
         <button class="danger" id="clearBtn">クリア</button>
       </div>
     </div>
@@ -859,6 +860,35 @@ document.getElementById('downloadBtn').addEventListener('click', async ()=>{
     showToast('保存に失敗しました。「全文コピー」をお試しください');
   }
 });
+document.getElementById('batchTcyBtn').addEventListener('click', ()=>{
+  const text = editor.value;
+  if(!text){ showToast('本文は空です'); return; }
+
+  // すでに ^...^ で囲まれている範囲は対象から除外するため、一時的に退避する
+  const placeholders = [];
+  let temp = text.replace(/\^[^^]*\^/g, (m)=>{
+    placeholders.push(m);
+    return '\u0000' + (placeholders.length - 1) + '\u0000';
+  });
+
+  let count = 0;
+  // 半角／全角の ! ? が2〜4文字連続している部分を縦中横に変換（例: !? !! ?? !!? など）
+  temp = temp.replace(/([!?！？]{2,4})/g, (m)=>{
+    count++;
+    return '^' + m + '^';
+  });
+
+  temp = temp.replace(/\u0000(\d+)\u0000/g, (m, idx)=> placeholders[parseInt(idx, 10)]);
+
+  if(count === 0){
+    showToast('変換できる箇所が見つかりませんでした');
+    return;
+  }
+  editor.value = temp;
+  updateCount(); scheduleSave(); schedulePreview();
+  showToast(count + '箇所を縦中横に変換しました');
+});
+
 document.getElementById('clearBtn').addEventListener('click', ()=>{
   if(editor.value.length === 0){ showToast('本文は空です'); return; }
   document.getElementById('clearModalBackdrop').classList.add('show');
