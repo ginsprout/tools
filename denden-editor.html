@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>でんでん記法エディター</title>
+
+<!-- ── Favicon（画像ファイルを使わない、HTML埋め込み型） ── -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='31' fill='%23f7f3ea' stroke='%23d8cfb9' stroke-width='1.5'/%3E%3Crect x='17' y='13' width='4' height='38' rx='2' fill='%232c3e54'/%3E%3Crect x='29' y='13' width='4' height='38' rx='2' fill='%232c3e54'/%3E%3Crect x='41' y='13' width='4' height='29' rx='2' fill='%232c3e54'/%3E%3Ccircle cx='43' cy='49' r='3.2' fill='%23b5462f'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23f7f3ea'/%3E%3Crect x='17' y='13' width='4' height='38' rx='2' fill='%232c3e54'/%3E%3Crect x='29' y='13' width='4' height='38' rx='2' fill='%232c3e54'/%3E%3Crect x='41' y='13' width='4' height='29' rx='2' fill='%232c3e54'/%3E%3Ccircle cx='43' cy='49' r='3.2' fill='%23b5462f'/%3E%3C/svg%3E">
+<meta name="apple-mobile-web-app-title" content="でんでん記法">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2c3e54">
+<style>
+  :root{
+    --paper: #f7f3ea;
+    --ink: #2b2a28;
+    --ink-soft: #5c5850;
+    --indigo: #2c3e54;
+    --indigo-deep: #1c2a3a;
+    --vermillion: #b5462f;
+    --vermillion-soft: #d9a896;
+    --line: #d8cfb9;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; height:100%; }
+  body{
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .wrap{
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 16px 14px 50px;
+  }
+  header{
+    display:flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  h1{
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin: 0;
+    color: var(--indigo-deep);
+  }
+  .count{
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  }
+
+  /* タブ */
+  .tabs{
+    display:flex;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .tab{
+    flex:1;
+    text-align:center;
+    padding: 10px 6px;
+    font-size: 13px;
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    border: 1px solid var(--indigo);
+    background: #fff;
+    color: var(--indigo-deep);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .tab.active{
+    background: var(--indigo);
+    color: #fff;
+  }
+
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+
+  /* ツールバー */
+  .toolbar{
+    display:flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  button{
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    border: 1px solid var(--indigo);
+    background: #fff;
+    color: var(--indigo-deep);
+    padding: 10px 12px;
+    font-size: 13px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  button:active{ transform: translateY(1px); }
+  button.add-btn{
+    border-style: dashed;
+    color: var(--ink-soft);
+    border-color: var(--ink-soft);
+  }
+  button.danger{
+    border-color: var(--vermillion);
+    color: var(--vermillion);
+  }
+  .custom-btn-group{
+    display:inline-flex;
+    align-items: center;
+    border: 1px solid var(--vermillion-soft);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .custom-btn-group button{ border:none; border-radius:0; }
+  .custom-btn-group .remove{
+    padding: 10px 9px;
+    color: var(--vermillion);
+    font-size: 12px;
+    border-left: 1px solid var(--vermillion-soft);
+  }
+
+  textarea{
+    width: 100%;
+    min-height: 50vh;
+    padding: 16px;
+    font-size: 16px;
+    line-height: 1.9;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+    color: var(--ink);
+    background: #fffdf8;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    resize: vertical;
+  }
+  textarea:focus{ outline:none; border-color: var(--indigo); }
+
+  .footer-row{
+    display:flex;
+    justify-content: space-between;
+    align-items:center;
+    margin-top: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .hint{
+    font-size: 11px;
+    color: var(--ink-soft);
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  }
+  .actions{ display:flex; gap: 6px; flex-wrap:wrap; }
+
+  /* 縦書き／横書き切り替え */
+  .preview-toggle{
+    display:flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .ptoggle{
+    padding: 7px 14px;
+    font-size: 12px;
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink-soft);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .ptoggle.active{
+    border-color: var(--indigo);
+    color: var(--indigo-deep);
+    background: #eef1f4;
+  }
+
+  /* 縦書きプレビュー */
+  .preview-box{
+    border: 1px solid var(--line);
+    background: #fffdf8;
+    border-radius: 4px;
+    height: 60vh;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .preview-inner{
+    writing-mode: vertical-rl;
+    -webkit-writing-mode: vertical-rl;
+    text-orientation: mixed;
+    height: 100%;
+    padding: 22px 18px;
+    font-size: 16px;
+    line-height: 2.1;
+  }
+  .preview-inner.horizontal{
+    writing-mode: horizontal-tb;
+    -webkit-writing-mode: horizontal-tb;
+    height: auto;
+    min-height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .preview-inner p{ margin: 0 0 1.4em 0; }
+  .preview-inner h1,.preview-inner h2,.preview-inner h3,
+  .preview-inner h4,.preview-inner h5,.preview-inner h6{
+    margin: 0 0 1em 0;
+    font-weight: 600;
+  }
+  .preview-inner ruby rt{ font-size: 0.5em; }
+  .preview-inner em.bouten{
+    font-style: normal;
+    -webkit-text-emphasis-style: dot;
+    text-emphasis-style: dot;
+    text-emphasis-position: outside;
+  }
+  /* 横書きでは*強調*はイタリック体になる（公式仕様どおり、圏点は縦書き限定） */
+  .preview-inner.horizontal em.bouten{
+    font-style: italic;
+    -webkit-text-emphasis-style: none;
+    text-emphasis-style: none;
+  }
+  .preview-inner .tcy{
+    -webkit-text-combine: horizontal;
+    text-combine-upright: all;
+  }
+  .preview-inner .page-divider{
+    writing-mode: horizontal-tb;
+    font-size: 10px;
+    color: var(--ink-soft);
+    text-align:center;
+    margin: 0 0 1.4em 0;
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  }
+  .preview-inner .blank-line{ width: 1.4em; }
+  .preview-inner.horizontal .blank-line{ width: auto; height: 1.4em; }
+  .preview-inner .link{
+    color: var(--vermillion);
+    text-decoration: underline;
+  }
+  .preview-inner .img-placeholder{
+    display: inline-block;
+    writing-mode: horizontal-tb;
+    border: 1px dashed var(--ink-soft);
+    border-radius: 3px;
+    padding: 1px 8px;
+    margin: 0 2px;
+    font-size: 0.75em;
+    color: var(--ink-soft);
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    vertical-align: middle;
+  }
+  .preview-empty{
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    color: var(--ink-soft);
+    font-size: 13px;
+    writing-mode: horizontal-tb;
+    padding: 20px;
+  }
+  .preview-note{
+    font-size: 11px;
+    color: var(--ink-soft);
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    margin: 8px 0 0;
+  }
+
+  .toast{
+    position: fixed;
+    bottom: 18px; left: 50%;
+    transform: translate(-50%, 8px);
+    background: var(--indigo-deep);
+    color: #fff;
+    padding: 9px 18px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 60;
+  }
+  .toast.show{ opacity: 1; transform: translate(-50%, 0); }
+
+  .modal-backdrop{
+    position: fixed; inset:0;
+    background: rgba(20,20,18,0.4);
+    display:none;
+    align-items:center; justify-content:center;
+    z-index: 50; padding: 16px;
+  }
+  .modal-backdrop.show{ display:flex; }
+  .modal{
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 20px;
+    width: 100%;
+    max-width: 320px;
+    font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  }
+  .modal h2{ font-size: 14px; margin: 0 0 12px; color: var(--indigo-deep); }
+  .modal label{ display:block; font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; }
+  .modal input{
+    width:100%; padding: 8px 9px; font-size: 13px;
+    border: 1px solid var(--line); border-radius: 3px;
+    margin-bottom: 12px; font-family: inherit;
+  }
+  .modal-actions{ display:flex; justify-content:flex-end; gap: 8px; }
+
+  @media (max-width: 480px){
+    button{ font-size: 12px; padding: 10px 9px; }
+    h1{ font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>でんでん記法エディター</h1>
+    <span class="count" id="charCount">0文字</span>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="edit">編集</div>
+    <div class="tab" data-tab="preview">プレビュー</div>
+  </div>
+
+  <div class="panel active" id="panelEdit">
+    <div class="toolbar" id="toolbar">
+      <button data-action="pagebreak">改ページ</button>
+      <button data-action="blankline">1行あけ</button>
+      <button data-action="ruby">ルビ</button>
+      <button data-action="bouten">傍点</button>
+      <button data-action="heading" data-level="1">見出し1</button>
+      <button data-action="heading" data-level="2">見出し2</button>
+      <button data-action="heading" data-level="3">見出し3</button>
+      <button data-action="tcy">縦中横</button>
+      <button data-action="link">リンク</button>
+      <button data-action="image">画像</button>
+      <button class="add-btn" id="addBtn">＋ボタン追加</button>
+    </div>
+
+    <textarea id="editor" placeholder="ここに本文を書く、または貼り付けてください。"></textarea>
+
+    <div class="footer-row">
+      <span class="hint">ルビ・傍点・縦中横は文字を選択してからボタンを押すと囲みます。</span>
+      <div class="actions">
+        <button id="copyBtn">全文コピー</button>
+        <button id="downloadBtn">共有</button>
+        <button class="danger" id="clearBtn">クリア</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="panelPreview">
+    <div class="preview-toggle">
+      <div class="ptoggle active" data-mode="vertical">縦書き</div>
+      <div class="ptoggle" data-mode="horizontal">横書き</div>
+    </div>
+    <div class="preview-box">
+      <div class="preview-inner" id="previewInner">
+        <div class="preview-empty">編集タブで本文を入力すると、ここに表示されます。</div>
+      </div>
+    </div>
+    <p class="preview-note">※これは構成確認用の簡易プレビューです。実際のEPUB／Kindleでの見た目は、必ずKindle Previewer等で最終確認してください。</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h2>カスタムボタンを追加</h2>
+    <label>ボタンの表示名</label>
+    <input type="text" id="modalLabel" placeholder="例: 章タイトル">
+    <label>挿入する記法（カーソル位置に挿入）</label>
+    <input type="text" id="modalSnippet" placeholder="例: ## 見出し ##">
+    <div class="modal-actions">
+      <button id="modalCancel">キャンセル</button>
+      <button id="modalSave">追加する</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="clearModalBackdrop">
+  <div class="modal">
+    <h2>本文をすべて消去します</h2>
+    <p style="font-size:13px; color:var(--ink-soft); margin: 0 0 16px;">この操作は元に戻せません。よろしいですか？</p>
+    <div class="modal-actions">
+      <button id="clearCancel">キャンセル</button>
+      <button class="danger" id="clearConfirm">消去する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const editor = document.getElementById('editor');
+const toolbar = document.getElementById('toolbar');
+const charCount = document.getElementById('charCount');
+const toast = document.getElementById('toast');
+const previewInner = document.getElementById('previewInner');
+
+const CONTENT_KEY = 'content';
+const BUTTONS_KEY = 'custom-buttons';
+let saveTimer = null;
+let previewTimer = null;
+
+function showToast(msg){
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(()=> toast.classList.remove('show'), 1700);
+}
+
+function updateCount(){
+  charCount.textContent = editor.value.length + '文字';
+}
+
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async ()=>{
+    try{ await window.storage.set(CONTENT_KEY, editor.value, false); }catch(e){}
+  }, 700);
+}
+
+function schedulePreview(){
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(renderPreview, 250);
+}
+
+editor.addEventListener('input', ()=>{
+  updateCount();
+  scheduleSave();
+  schedulePreview();
+});
+
+/* ===== でんでん記法 → プレビューHTML（簡易パーサー） ===== */
+function escapeHtml(str){
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function inlineParse(str){
+  let s = escapeHtml(str);
+  // 画像 ![代替テキスト](パス)
+  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (m, alt)=>{
+    const label = alt && alt.trim() ? alt : '(画像)';
+    return '<span class="img-placeholder">🖼 ' + label + '</span>';
+  });
+  // ハイパーリンク [テキスト](URL "タイトル")
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (m, text, url, title)=>{
+    const t = title ? ' title="'+title+'"' : '';
+    return '<a class="link" href="'+url+'"'+t+'>'+text+'</a>';
+  });
+  // ルビ {親文字|るび|るび...}
+  s = s.replace(/\{([^{}|]+)((?:\|[^{}|]*)+)\}/g, (m, base, rubyPart)=>{
+    const rubies = rubyPart.split('|').slice(1);
+    const baseChars = Array.from(base);
+    if(rubies.length > 1 && rubies.length === baseChars.length){
+      return '<ruby>' + baseChars.map((c,i)=>c+'<rt>'+rubies[i]+'</rt>').join('') + '</ruby>';
+    }
+    return '<ruby>' + base + '<rt>' + rubies.join('') + '</rt></ruby>';
+  });
+  // 縦中横 ^text^
+  s = s.replace(/\^([^^]+)\^/g, '<span class="tcy">$1</span>');
+  // 重要 **text**
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // 強調（縦書きでは傍点） *text*
+  s = s.replace(/\*([^*]+)\*/g, '<em class="bouten">$1</em>');
+  return s;
+}
+
+function pageDividerHtml(n){
+  return '<div class="page-divider">――― 改ページ '+n+' ―――</div>';
+}
+const EMPTY_HTML = '<div class="preview-empty">編集タブで本文を入力すると、ここに縦書きで表示されます。</div>';
+
+function parseDenden(text){
+  if(!text.trim()) return EMPTY_HTML;
+
+  const blocks = text.split(/\n[ \t]*\n+/);
+  let html = '';
+  let pageNum = 1;
+
+  blocks.forEach(block=>{
+    const trimmed = block.trim();
+    if(trimmed === '') return;
+
+    // ブロック全体が改ページ行だけのとき（空行で正しく囲まれているケース）
+    if(/^={3,}$/.test(trimmed)){
+      pageNum++;
+      html += pageDividerHtml(pageNum);
+      return;
+    }
+    // ブロック全体が1行あけ指定のとき
+    if(/^<p>\s*<br\s*\/?>\s*<\/p>$/i.test(trimmed)){
+      html += '<div class="blank-line"></div>';
+      return;
+    }
+    // ブロックが見出し1行だけのとき
+    const headingMatch = trimmed.match(/^(#{1,6})\s*(.+?)\s*#*$/);
+    if(headingMatch && block.split('\n').length === 1){
+      const level = headingMatch[1].length;
+      html += '<h'+level+'>'+inlineParse(headingMatch[2])+'</h'+level+'>';
+      return;
+    }
+
+    // 通常の段落。改ページ行や1行あけ指定が、空行を挟まずに本文中へ
+    // 直接混在しているケースにも対応するため、行単位でも改ページ等を検出する。
+    const lines = block.split('\n');
+    let buffer = [];
+    const flushParagraph = ()=>{
+      if(buffer.length){
+        html += '<p>'+buffer.map(inlineParse).join('<br>')+'</p>';
+        buffer = [];
+      }
+    };
+    lines.forEach(line=>{
+      const lineTrim = line.trim();
+      if(/^={3,}$/.test(lineTrim)){
+        flushParagraph();
+        pageNum++;
+        html += pageDividerHtml(pageNum);
+      } else if(/^<p>\s*<br\s*\/?>\s*<\/p>$/i.test(lineTrim)){
+        flushParagraph();
+        html += '<div class="blank-line"></div>';
+      } else if(/^#{1,6}\s*.+/.test(lineTrim)){
+        flushParagraph();
+        const m = lineTrim.match(/^(#{1,6})\s*(.+?)\s*#*$/);
+        const level = m[1].length;
+        html += '<h'+level+'>'+inlineParse(m[2])+'</h'+level+'>';
+      } else {
+        buffer.push(line);
+      }
+    });
+    flushParagraph();
+  });
+  return html || EMPTY_HTML;
+}
+
+function renderPreview(){
+  previewInner.innerHTML = parseDenden(editor.value);
+}
+
+/* ===== 挿入ロジック ===== */
+function insertBlock(line){
+  const start = editor.selectionStart, end = editor.selectionEnd;
+  const value = editor.value;
+
+  const beforeText = value.slice(0, start);
+  let prefix = '';
+  if(beforeText.length === 0){
+    prefix = '';
+  } else if(beforeText.endsWith('\n\n')){
+    prefix = '';
+  } else if(beforeText.endsWith('\n')){
+    prefix = '\n';
+  } else {
+    prefix = '\n\n';
+  }
+
+  const afterText = value.slice(end);
+  let suffix = '';
+  if(afterText.length === 0){
+    suffix = '';
+  } else if(afterText.startsWith('\n\n')){
+    suffix = '';
+  } else if(afterText.startsWith('\n')){
+    suffix = '\n';
+  } else {
+    suffix = '\n\n';
+  }
+
+  const insertText = prefix + line + suffix;
+  editor.value = value.slice(0, start) + insertText + value.slice(end);
+  const cursorPos = start + prefix.length + line.length + (suffix ? suffix.length : 0);
+  editor.focus();
+  editor.setSelectionRange(cursorPos, cursorPos);
+  updateCount(); scheduleSave(); schedulePreview();
+}
+
+function wrapSelection(before, after, placeholder){
+  const start = editor.selectionStart, end = editor.selectionEnd;
+  const value = editor.value;
+  const selected = value.slice(start, end);
+
+  if(selected.length > 0){
+    const insertText = before + selected + after;
+    editor.value = value.slice(0, start) + insertText + value.slice(end);
+    const cursorPos = start + insertText.length;
+    editor.focus();
+    editor.setSelectionRange(cursorPos, cursorPos);
+  } else {
+    const insertText = before + placeholder + after;
+    editor.value = value.slice(0, start) + insertText + value.slice(end);
+    const selStart = start + before.length;
+    const selEnd = selStart + placeholder.length;
+    editor.focus();
+    editor.setSelectionRange(selStart, selEnd);
+  }
+  updateCount(); scheduleSave(); schedulePreview();
+}
+
+function insertRuby(){
+  const start = editor.selectionStart, end = editor.selectionEnd;
+  const value = editor.value;
+  const selected = value.slice(start, end);
+
+  if(selected.length > 0){
+    const insertText = '{' + selected + '|' + '}';
+    editor.value = value.slice(0, start) + insertText + value.slice(end);
+    const cursorPos = start + 1 + selected.length + 1; // | と } の間
+    editor.focus();
+    editor.setSelectionRange(cursorPos, cursorPos);
+  } else {
+    const template = '{親文字|るび}';
+    editor.value = value.slice(0, start) + template + value.slice(end);
+    // 「親文字」部分を選択状態にする
+    const selStart = start + 1;
+    const selEnd = selStart + 3;
+    editor.focus();
+    editor.setSelectionRange(selStart, selEnd);
+  }
+  updateCount(); scheduleSave(); schedulePreview();
+}
+
+function insertHeadingBlock(level){
+  const lv = Math.min(Math.max(parseInt(level, 10) || 2, 1), 6);
+  const hashes = '#'.repeat(lv);
+  const start = editor.selectionStart, end = editor.selectionEnd;
+  const value = editor.value;
+  const selected = value.slice(start, end) || '見出し';
+  const line = hashes + ' ' + selected;
+
+  const beforeText = value.slice(0, start);
+  let prefix = '';
+  if(beforeText.length === 0){ prefix = ''; }
+  else if(beforeText.endsWith('\n\n')){ prefix = ''; }
+  else if(beforeText.endsWith('\n')){ prefix = '\n'; }
+  else { prefix = '\n\n'; }
+
+  const afterText = value.slice(end);
+  let suffix = '';
+  if(afterText.length === 0){ suffix = ''; }
+  else if(afterText.startsWith('\n\n')){ suffix = ''; }
+  else if(afterText.startsWith('\n')){ suffix = '\n'; }
+  else { suffix = '\n\n'; }
+
+  const insertText = prefix + line + suffix;
+  editor.value = value.slice(0, start) + insertText + value.slice(end);
+
+  const textStart = start + prefix.length + hashes.length + 1; // 'hashes ' の後ろ
+  const textEnd = textStart + selected.length;
+  editor.focus();
+  editor.setSelectionRange(textStart, textEnd);
+  updateCount(); scheduleSave(); schedulePreview();
+}
+
+function insertLink(){
+  const start = editor.selectionStart, end = editor.selectionEnd;
+  const value = editor.value;
+  const selected = value.slice(start, end);
+  const text = selected || 'リンクテキスト';
+  const before = '[' + text + '](';
+  const urlPlaceholder = 'URL';
+  const after = ')';
+  editor.value = value.slice(0, start) + before + urlPlaceholder + after + value.slice(end);
+  const selStart = start + before.length;
+  const selEnd = selStart + urlPlaceholder.length;
+  editor.focus();
+  editor.setSelectionRange(selStart, selEnd);
+  updateCount(); scheduleSave(); schedulePreview();
+}
+
+function insertImage(){
+  const start = editor.selectionStart, end = editor.selectionEnd;
+  const value = editor.value;
+  const selected = value.slice(start, end);
+  const alt = selected || '代替テキスト';
+  const before = '![' + alt + '](';
+  const pathPlaceholder = 'img.jpg';
+  const after = ')';
+  editor.value = value.slice(0, start) + before + pathPlaceholder + after + value.slice(end);
+  const selStart = start + before.length;
+  const selEnd = selStart + pathPlaceholder.length;
+  editor.focus();
+  editor.setSelectionRange(selStart, selEnd);
+  updateCount(); scheduleSave(); schedulePreview();
+}
+
+function handleAction(action, snippet, level){
+  switch(action){
+    case 'pagebreak': insertBlock('=============='); break;
+    case 'blankline': insertBlock('<p><br /></p>'); break;
+    case 'ruby': insertRuby(); break;
+    case 'bouten': wrapSelection('*', '*', '強調'); break;
+    case 'heading': insertHeadingBlock(level); break;
+    case 'tcy': wrapSelection('^', '^', '53'); break;
+    case 'link': insertLink(); break;
+    case 'image': insertImage(); break;
+    case 'custom': insertAtCursorRaw(snippet); break;
+  }
+}
+
+function insertAtCursorRaw(text){
+  const start = editor.selectionStart, end = editor.selectionEnd;
+  const value = editor.value;
+  editor.value = value.slice(0, start) + text + value.slice(end);
+  const cursorPos = start + text.length;
+  editor.focus();
+  editor.setSelectionRange(cursorPos, cursorPos);
+  updateCount(); scheduleSave(); schedulePreview();
+}
+
+toolbar.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-action]');
+  if(!btn) return;
+  handleAction(btn.dataset.action, btn.dataset.snippet, btn.dataset.level);
+});
+
+/* ===== カスタムボタン ===== */
+async function loadCustomButtons(){
+  try{
+    const result = await window.storage.get(BUTTONS_KEY, false);
+    return result ? JSON.parse(result.value) : [];
+  }catch(e){ return []; }
+}
+async function saveCustomButtons(list){
+  try{ await window.storage.set(BUTTONS_KEY, JSON.stringify(list), false); }catch(e){}
+}
+function renderCustomButton(item, index){
+  const group = document.createElement('span');
+  group.className = 'custom-btn-group';
+  const btn = document.createElement('button');
+  btn.textContent = item.label;
+  btn.dataset.action = 'custom';
+  btn.dataset.snippet = item.snippet;
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'remove';
+  removeBtn.textContent = '×';
+  removeBtn.addEventListener('click', async (e)=>{
+    e.stopPropagation();
+    const list = await loadCustomButtons();
+    list.splice(index, 1);
+    await saveCustomButtons(list);
+    refreshCustomButtons();
+  });
+  group.appendChild(btn);
+  group.appendChild(removeBtn);
+  return group;
+}
+async function refreshCustomButtons(){
+  document.querySelectorAll('.custom-btn-group').forEach(el => el.remove());
+  const list = await loadCustomButtons();
+  const addBtn = document.getElementById('addBtn');
+  list.forEach((item, i)=> toolbar.insertBefore(renderCustomButton(item, i), addBtn));
+}
+
+const modalBackdrop = document.getElementById('modalBackdrop');
+const modalLabel = document.getElementById('modalLabel');
+const modalSnippet = document.getElementById('modalSnippet');
+
+document.getElementById('addBtn').addEventListener('click', ()=>{
+  modalLabel.value = ''; modalSnippet.value = '';
+  modalBackdrop.classList.add('show');
+  modalLabel.focus();
+});
+document.getElementById('modalCancel').addEventListener('click', ()=> modalBackdrop.classList.remove('show'));
+modalBackdrop.addEventListener('click', (e)=>{ if(e.target === modalBackdrop) modalBackdrop.classList.remove('show'); });
+document.getElementById('modalSave').addEventListener('click', async ()=>{
+  const label = modalLabel.value.trim();
+  const snippet = modalSnippet.value;
+  if(!label || !snippet){ showToast('表示名と記法の両方を入力してください'); return; }
+  const list = await loadCustomButtons();
+  list.push({ label, snippet });
+  await saveCustomButtons(list);
+  modalBackdrop.classList.remove('show');
+  refreshCustomButtons();
+  showToast('ボタンを追加しました');
+});
+
+/* ===== その他操作 ===== */
+document.getElementById('copyBtn').addEventListener('click', async ()=>{
+  try{ await navigator.clipboard.writeText(editor.value); showToast('コピーしました'); }
+  catch(e){ editor.select(); document.execCommand('copy'); showToast('コピーしました'); }
+});
+document.getElementById('downloadBtn').addEventListener('click', async ()=>{
+  const text = editor.value;
+  if(!text){ showToast('本文は空です'); return; }
+
+  // スマホのサンドボックス環境ではBlobの直接ダウンロードが動かない場合があるため、
+  // まずOSの共有シート（ファイルとして共有）を試す。
+  try{
+    if(navigator.canShare && navigator.share){
+      const file = new File([text], 'manuscript.txt', { type: 'text/plain' });
+      if(navigator.canShare({ files: [file] })){
+        await navigator.share({ files: [file], title: 'manuscript.txt' });
+        showToast('共有しました');
+        return;
+      }
+    }
+  }catch(err){
+    // ユーザーが共有をキャンセルした場合もここに来るので、何もしない
+    if(err && err.name === 'AbortError'){ return; }
+  }
+
+  // 共有が使えない環境ではBlobダウンロードを試す
+  try{
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'manuscript.txt';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('保存しました');
+    return;
+  }catch(err){}
+
+  // どちらも使えない場合はクリップボードにコピーして案内
+  try{
+    await navigator.clipboard.writeText(text);
+    showToast('この環境では保存できないため、コピーしました。メモ等に貼り付けてください');
+  }catch(err){
+    showToast('保存に失敗しました。「全文コピー」をお試しください');
+  }
+});
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  if(editor.value.length === 0){ showToast('本文は空です'); return; }
+  document.getElementById('clearModalBackdrop').classList.add('show');
+});
+document.getElementById('clearCancel').addEventListener('click', ()=>{
+  document.getElementById('clearModalBackdrop').classList.remove('show');
+});
+document.getElementById('clearModalBackdrop').addEventListener('click', (e)=>{
+  if(e.target.id === 'clearModalBackdrop') e.target.classList.remove('show');
+});
+document.getElementById('clearConfirm').addEventListener('click', ()=>{
+  editor.value = '';
+  updateCount(); scheduleSave(); schedulePreview();
+  document.getElementById('clearModalBackdrop').classList.remove('show');
+  showToast('消去しました');
+});
+
+/* ===== タブ切り替え ===== */
+document.querySelectorAll('.ptoggle').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.ptoggle').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    if(btn.dataset.mode === 'horizontal'){
+      previewInner.classList.add('horizontal');
+    } else {
+      previewInner.classList.remove('horizontal');
+    }
+  });
+});
+
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    if(tab.dataset.tab === 'edit'){
+      document.getElementById('panelEdit').classList.add('active');
+    } else {
+      document.getElementById('panelPreview').classList.add('active');
+      renderPreview();
+    }
+  });
+});
+
+/* ===== 初期化（前回の続きを復元） ===== */
+async function init(){
+  try{
+    const saved = await window.storage.get(CONTENT_KEY, false);
+    if(saved && saved.value){
+      editor.value = saved.value;
+      showToast('前回の続きを読み込みました');
+    }
+  }catch(e){}
+  updateCount();
+  refreshCustomButtons();
+}
+init();
+</script>
+</body>
+</html>
