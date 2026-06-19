@@ -765,6 +765,7 @@ function insertDividerPage(){
 }
 
 function handleAction(action, snippet, level){
+  const scrollTop = editor.scrollTop; // 挿入処理でスクロール位置が飛ぶのを防ぐため、事前に保存
   switch(action){
     case 'pagebreak': insertBlock('=============='); break;
     case 'blankline': insertBlock('<p><br /></p>'); break;
@@ -777,6 +778,7 @@ function handleAction(action, snippet, level){
     case 'divider': insertDividerPage(); break;
     case 'custom': insertAtCursorRaw(snippet); break;
   }
+  editor.scrollTop = scrollTop; // 保存したスクロール位置に戻す
 }
 
 function insertAtCursorRaw(text){
@@ -904,6 +906,7 @@ document.getElementById('downloadBtn').addEventListener('click', async ()=>{
 document.getElementById('batchTcyBtn').addEventListener('click', ()=>{
   const text = editor.value;
   if(!text){ showToast('本文は空です'); return; }
+  const scrollTop = editor.scrollTop;
 
   // すでに ^...^ で囲まれている範囲は対象から除外するため、一時的に退避する
   const placeholders = [];
@@ -927,6 +930,7 @@ document.getElementById('batchTcyBtn').addEventListener('click', ()=>{
   }
   editor.value = temp;
   updateCount(); scheduleSave(); schedulePreview();
+  editor.scrollTop = scrollTop;
   showToast(count + '箇所を縦中横に変換しました');
 });
 
