@@ -220,6 +220,7 @@
     <h1>でんでん記法 変換ツール</h1>
     <p class="lead">Notionからエクスポートしたmdファイル（複数話）をまとめて読み込み、見出しの変換と話間の改ページ挿入を行って、1つのでんでん原稿に結合します。</p>
     <p class="lead" style="margin-top:6px;">※「1行あけ」をしたい箇所は、Notionの空の段落（Enter2回）ではなく「区切り線（Divider）」ブロックを使ってください。空段落は書き出し時に消えてしまいますが、区切り線は <code>---</code> として残るため、自動で「1行あけ」に変換できます。</p>
+    <p class="lead" style="margin-top:6px;">※「!?」「!!」などの記号の連続や、見出しの「【II-001】」のような話数表記は、変換時に自動で縦中横に変換されます。</p>
   </header>
 
   <section>
@@ -387,18 +388,53 @@ function detectWarnings(body, label, warnings){
   });
 }
 
+function batchConvertPunctuation(text){
+  const placeholders = [];
+  let temp = text.replace(/\^[^^]*\^/g, (m)=>{
+    placeholders.push(m);
+    return '\u0000' + (placeholders.length - 1) + '\u0000';
+  });
+  let count = 0;
+  temp = temp.replace(/([!?！？]{2,4})/g, (m)=>{
+    count++;
+    return '^' + m + '^';
+  });
+  temp = temp.replace(/\u0000(\d+)\u0000/g, (m, idx)=> placeholders[parseInt(idx, 10)]);
+  return { text: temp, count };
+}
+
+function tcyHeadingNumbers(title, counterRef){
+  return title.replace(/【([A-Za-zIVXLCMivxlcm]+)-(\d+)】/g, (m, p1, p2)=>{
+    counterRef.count++;
+    return '【^' + p1 + '^-^' + p2 + '^】';
+  });
+}
+
 function runConvert(){
   const warnings = [];
   const notices = [];
+  const headingCounter = { count: 0 };
   const parts = files.map((f, i)=>{
     const { title, body: rawBody } = extractTitleAndBody(f.text);
     const body = convertDividerLines(rawBody, f.name, notices);
     detectWarnings(body, f.name, warnings);
     const fallbackTitle = f.name.replace(/\.[^.]+$/, '');
-    const headingLine = '## ' + (title || fallbackTitle);
+    const rawTitle = title || fallbackTitle;
+    const headingLine = '## ' + tcyHeadingNumbers(rawTitle, headingCounter);
     return headingLine + '\n\n' + body;
   });
-  const combined = parts.join('\n\n==============\n\n');
+  let combined = parts.join('\n\n==============\n\n');
+
+  if(headingCounter.count > 0){
+    notices.push('見出しの話数表記（【II-001】など）' + headingCounter.count + '件の英字・数字部分を縦中横に変換しました。');
+  }
+
+  // !? !! ?? のような記号の連続を自動で縦中横に変換
+  const tcyResult = batchConvertPunctuation(combined);
+  combined = tcyResult.text;
+  if(tcyResult.count > 0){
+    notices.push('「!?」「!!」などの記号' + tcyResult.count + '箇所を縦中横に変換しました。');
+  }
 
   output.value = combined;
   summaryText.textContent = files.length + '話を結合しました（' + combined.length + '文字）。話の間には改ページ記号を自動で入れています。';
