@@ -207,6 +207,7 @@
     overflow-x: hidden;
   }
   .preview-inner p{ margin: 0 0 1.4em 0; }
+  .preview-inner p.text-center{ text-align: center; }
   .preview-inner h1,.preview-inner h2,.preview-inner h3,
   .preview-inner h4,.preview-inner h5,.preview-inner h6{
     margin: 0 0 1em 0;
@@ -342,6 +343,7 @@
       <button data-action="tcy">縦中横</button>
       <button data-action="link">リンク</button>
       <button data-action="image">画像</button>
+      <button data-action="divider">扉ページ</button>
       <button class="add-btn" id="addBtn">＋ボタン追加</button>
     </div>
 
@@ -533,6 +535,13 @@ function parseDenden(text){
       html += '<div class="blank-line"></div>';
       return;
     }
+    // 中央寄せ（扉ページ）の段落
+    const centerMatch = trimmed.match(/^<p class="text-center"[^>]*>([\s\S]*?)<\/p>$/i);
+    if(centerMatch && block.split('\n').length === 1){
+      html += '<p class="text-center">' + inlineParse(centerMatch[1]) + '</p>';
+      return;
+    }
+
     // ブロックが見出し1行だけのとき
     const headingMatch = trimmed.match(/^(#{1,6})\s*(.+?)\s*#*$/);
     if(headingMatch && block.split('\n').length === 1){
@@ -724,6 +733,37 @@ function insertImage(){
   updateCount(); scheduleSave(); schedulePreview();
 }
 
+function insertDividerPage(){
+  const start = editor.selectionStart, end = editor.selectionEnd;
+  const value = editor.value;
+  const selected = value.slice(start, end) || '扉ページのタイトル';
+
+  const beforeText = value.slice(0, start);
+  let prefix = '';
+  if(beforeText.length === 0){ prefix = ''; }
+  else if(beforeText.endsWith('\n\n')){ prefix = ''; }
+  else if(beforeText.endsWith('\n')){ prefix = '\n'; }
+  else { prefix = '\n\n'; }
+
+  const afterText = value.slice(end);
+  let suffix = '';
+  if(afterText.length === 0){ suffix = ''; }
+  else if(afterText.startsWith('\n\n')){ suffix = ''; }
+  else if(afterText.startsWith('\n')){ suffix = '\n'; }
+  else { suffix = '\n\n'; }
+
+  const openTag = '<p class="text-center" markdown="1">';
+  const block = '==============\n\n' + openTag + selected + '</p>\n\n==============';
+  const insertText = prefix + block + suffix;
+  editor.value = value.slice(0, start) + insertText + value.slice(end);
+
+  const titleStart = start + prefix.length + '=============='.length + '\n\n'.length + openTag.length;
+  const titleEnd = titleStart + selected.length;
+  editor.focus();
+  editor.setSelectionRange(titleStart, titleEnd);
+  updateCount(); scheduleSave(); schedulePreview();
+}
+
 function handleAction(action, snippet, level){
   switch(action){
     case 'pagebreak': insertBlock('=============='); break;
@@ -734,6 +774,7 @@ function handleAction(action, snippet, level){
     case 'tcy': wrapSelection('^', '^', '53'); break;
     case 'link': insertLink(); break;
     case 'image': insertImage(); break;
+    case 'divider': insertDividerPage(); break;
     case 'custom': insertAtCursorRaw(snippet); break;
   }
 }
