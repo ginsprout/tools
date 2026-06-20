@@ -213,12 +213,23 @@
     justify-content: center;
     align-items: flex-start;
     height: 100%;
+    gap: 0.6em;
   }
-  .preview-inner .part-title p{ margin:0; }
+  .preview-inner .part-title p{ margin: 0; }
+  .preview-inner p.center-text{
+    display:flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+  }
   .preview-inner h1,.preview-inner h2,.preview-inner h3,
   .preview-inner h4,.preview-inner h5,.preview-inner h6{
     margin: 0 0 1em 0;
     font-weight: 600;
+  }
+  .preview-inner h1.part-title,.preview-inner h2.part-title,.preview-inner h3.part-title,
+  .preview-inner h4.part-title,.preview-inner h5.part-title,.preview-inner h6.part-title{
+    margin: 0;
   }
   .preview-inner ruby rt{ font-size: 0.5em; }
   .preview-inner em.bouten{
@@ -350,7 +361,8 @@
       <button data-action="tcy">縦中横</button>
       <button data-action="link">リンク</button>
       <button data-action="image">画像</button>
-      <button data-action="divider">センター寄せ</button>
+      <button data-action="divider">章扉</button>
+      <button data-action="centertext">センター寄せ</button>
       <button class="add-btn" id="addBtn">＋ボタン追加</button>
     </div>
 
@@ -523,15 +535,39 @@ const EMPTY_HTML = '<div class="preview-empty">編集タブで本文を入力す
 function parseDenden(text){
   if(!text.trim()) return EMPTY_HTML;
 
-  // 扉ページのdivブロックは、内部に空行が入っていても崩れないように、
+  // 扉ページのブロックは、内部に空行が入っていても崩れないように、
   // ブロック分割の前に丸ごと検出してプレースホルダーに置き換える。
-  const partTitles = [];
-  const normalizedText = text.replace(
+  const partTitles = []; // { level, content }
+
+  // 新方式：見出しタグ（h1〜h6）に直接スタイルを当てたもの（章扉）
+  let normalizedText = text.replace(
+    /<h([1-6])[^>]*class="denden-center-page"[^>]*>([\s\S]*?)<\/h\1>/gi,
+    (m, level, inner)=>{
+      const content = inner.replace(/\n+/g, '').trim();
+      partTitles.push({ level: parseInt(level, 10), content });
+      return '\n\n\u0001PARTTITLE' + (partTitles.length - 1) + '\u0001\n\n';
+    }
+  );
+
+  // 改ページなしの単独センター寄せ段落
+  const centerTexts = [];
+  normalizedText = normalizedText.replace(
+    /<p[^>]*class="denden-center-text"[^>]*>([\s\S]*?)<\/p>/gi,
+    (m, inner)=>{
+      centerTexts.push(inner.replace(/\n+/g, '').trim());
+      return '\n\n\u0001CENTERTEXT' + (centerTexts.length - 1) + '\u0001\n\n';
+    }
+  );
+
+  // 旧方式：div + p で組んでいたもの（過去に挿入済みの原稿との互換用）
+  normalizedText = normalizedText.replace(
     /<div[^>]*class="denden-center-page"[^>]*>([\s\S]*?)<\/div>/gi,
     (m, inner)=>{
-      const pMatch = inner.match(/<p>([\s\S]*?)<\/p>/i);
-      const content = (pMatch ? pMatch[1] : inner).replace(/\n+/g, '').trim();
-      partTitles.push(content);
+      const pMatches = [...inner.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)];
+      const content = pMatches.length > 0
+        ? pMatches.map(pm => pm[1].replace(/\n+/g, '').trim()).join('\n')
+        : inner.replace(/\n+/g, '').trim();
+      partTitles.push({ level: 0, content });
       return '\n\n\u0001PARTTITLE' + (partTitles.length - 1) + '\u0001\n\n';
     }
   );
@@ -544,11 +580,25 @@ function parseDenden(text){
     const trimmed = block.trim();
     if(trimmed === '') return;
 
+    // 単独センター寄せ（改ページなし）のプレースホルダー
+    const centerTextMatch = trimmed.match(/^\u0001CENTERTEXT(\d+)\u0001$/);
+    if(centerTextMatch){
+      const content = centerTexts[parseInt(centerTextMatch[1], 10)];
+      html += '<p class="center-text">' + inlineParse(content) + '</p>';
+      return;
+    }
+
     // 扉ページ（横方向中央寄せ）のプレースホルダー
     const partTitleMatch = trimmed.match(/^\u0001PARTTITLE(\d+)\u0001$/);
     if(partTitleMatch){
-      const content = partTitles[parseInt(partTitleMatch[1], 10)];
-      html += '<div class="part-title">' + inlineParse(content) + '</div>';
+      const { level, content } = partTitles[parseInt(partTitleMatch[1], 10)];
+      // 複数行（旧方式で複数pタグだった場合）は別々の段落として中央寄せの中に並べる
+      const innerHtml = content.split('\n').map(line => '<p>' + inlineParse(line) + '</p>').join('');
+      if(level >= 1){
+        html += '<h' + level + ' class="part-title">' + innerHtml + '</h' + level + '>';
+      } else {
+        html += '<div class="part-title">' + innerHtml + '</div>';
+      }
       return;
     }
 
@@ -785,8 +835,10 @@ function insertDividerPage(){
   else if(afterText.startsWith('\n')){ suffix = '\n'; }
   else { suffix = '\n\n'; }
 
-  const openTag = '<div class="denden-center-page" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;height:100vh;" markdown="1">\n<p>';
-  const closeTag = '</p>\n</div>';
+  // div+pではなく見出しタグ(h2)自体にスタイルを当てる。
+  // これで「中央寄せ」と「本物の見出し（目次等に反映される）」を両立できる。
+  const openTag = '<h2 class="denden-center-page" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;height:100vh;" markdown="1">';
+  const closeTag = '</h2>';
   const block = '==============\n\n' + openTag + selected + closeTag + '\n\n==============';
   const insertText = prefix + block + suffix;
   replaceRange(start, end, insertText);
@@ -794,6 +846,38 @@ function insertDividerPage(){
   const titleStart = start + prefix.length + '=============='.length + '\n\n'.length + openTag.length;
   const titleEnd = titleStart + selected.length;
   editor.setSelectionRange(titleStart, titleEnd);
+  updateCount(); scheduleSave(); schedulePreview();
+}
+
+function insertCenterText(){
+  const start = editor.selectionStart, end = editor.selectionEnd;
+  const value = editor.value;
+  const selected = value.slice(start, end) || 'ここにセンター寄せしたい文章';
+
+  const beforeText = value.slice(0, start);
+  let prefix = '';
+  if(beforeText.length === 0){ prefix = ''; }
+  else if(beforeText.endsWith('\n\n')){ prefix = ''; }
+  else if(beforeText.endsWith('\n')){ prefix = '\n'; }
+  else { prefix = '\n\n'; }
+
+  const afterText = value.slice(end);
+  let suffix = '';
+  if(afterText.length === 0){ suffix = ''; }
+  else if(afterText.startsWith('\n\n')){ suffix = ''; }
+  else if(afterText.startsWith('\n')){ suffix = '\n'; }
+  else { suffix = '\n\n'; }
+
+  // 改ページなし。その場の1段落だけを横方向中央寄せにする。
+  const openTag = '<p class="denden-center-text" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;" markdown="1">';
+  const closeTag = '</p>';
+  const line = openTag + selected + closeTag;
+  const insertText = prefix + line + suffix;
+  replaceRange(start, end, insertText);
+
+  const textStart = start + prefix.length + openTag.length;
+  const textEnd = textStart + selected.length;
+  editor.setSelectionRange(textStart, textEnd);
   updateCount(); scheduleSave(); schedulePreview();
 }
 
@@ -809,6 +893,7 @@ function handleAction(action, snippet, level){
     case 'link': insertLink(); break;
     case 'image': insertImage(); break;
     case 'divider': insertDividerPage(); break;
+    case 'centertext': insertCenterText(); break;
     case 'custom': insertAtCursorRaw(snippet); break;
   }
   editor.scrollTop = scrollTop; // 保存したスクロール位置に戻す
