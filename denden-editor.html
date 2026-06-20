@@ -207,7 +207,14 @@
     overflow-x: hidden;
   }
   .preview-inner p{ margin: 0 0 1.4em 0; }
-  .preview-inner p.text-center{ text-align: center; }
+  .preview-inner .part-title{
+    display:flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    height: 100%;
+  }
+  .preview-inner .part-title p{ margin:0; }
   .preview-inner h1,.preview-inner h2,.preview-inner h3,
   .preview-inner h4,.preview-inner h5,.preview-inner h6{
     margin: 0 0 1em 0;
@@ -535,10 +542,10 @@ function parseDenden(text){
       html += '<div class="blank-line"></div>';
       return;
     }
-    // 中央寄せ（扉ページ）の段落
-    const centerMatch = trimmed.match(/^<p class="text-center"[^>]*>([\s\S]*?)<\/p>$/i);
-    if(centerMatch && block.split('\n').length === 1){
-      html += '<p class="text-center">' + inlineParse(centerMatch[1]) + '</p>';
+    // 扉ページ（横方向中央寄せ）のブロック
+    const dividerMatch = trimmed.match(/^<div[^>]*class="denden-center-page"[^>]*>\s*<p>([\s\S]*?)<\/p>\s*<\/div>$/i);
+    if(dividerMatch){
+      html += '<div class="part-title">' + inlineParse(dividerMatch[1]) + '</div>';
       return;
     }
 
@@ -752,8 +759,9 @@ function insertDividerPage(){
   else if(afterText.startsWith('\n')){ suffix = '\n'; }
   else { suffix = '\n\n'; }
 
-  const openTag = '<p class="text-center" markdown="1">';
-  const block = '==============\n\n' + openTag + selected + '</p>\n\n==============';
+  const openTag = '<div class="denden-center-page" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;height:100vh;" markdown="1">\n<p>';
+  const closeTag = '</p>\n</div>';
+  const block = '==============\n\n' + openTag + selected + closeTag + '\n\n==============';
   const insertText = prefix + block + suffix;
   editor.value = value.slice(0, start) + insertText + value.slice(end);
 
