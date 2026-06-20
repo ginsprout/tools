@@ -564,12 +564,16 @@ function parseDenden(text){
       return;
     }
 
-    // ブロックが見出し1行だけのとき
-    const headingMatch = trimmed.match(/^(#{1,6})\s*(.+?)\s*#*$/);
-    if(headingMatch && block.split('\n').length === 1){
-      const level = headingMatch[1].length;
-      html += '<h'+level+'>'+inlineParse(headingMatch[2])+'</h'+level+'>';
-      return;
+    // 見出し。意図しない改行が紛れ込んでいても、ブロックの最初の行が
+    // #で始まっていれば、ブロック全体を1つの見出しとしてまとめて扱う。
+    if(/^#{1,6}(\s|$)/.test(trimmed)){
+      const headingMatch = trimmed.match(/^(#{1,6})\s*([\s\S]*?)\s*#*$/);
+      if(headingMatch){
+        const level = headingMatch[1].length;
+        const content = headingMatch[2].replace(/\n+/g, ''); // 見出し内の改行は結合する
+        html += '<h'+level+'>'+inlineParse(content)+'</h'+level+'>';
+        return;
+      }
     }
 
     // 通常の段落。改ページ行や1行あけ指定が、空行を挟まずに本文中へ
@@ -609,7 +613,22 @@ function renderPreview(){
   previewInner.innerHTML = parseDenden(editor.value);
 }
 
-/* ===== 挿入ロジック ===== */
+/* ===== 挿入ロジック =====
+   editor.value を直接書き換えると、ブラウザの「元に戻す(⌘Z)」履歴が
+   壊れてしまうため、ネイティブの undo 履行を保ったまま挿入できる
+   document.execCommand('insertText', ...) を使う。
+   （非推奨APIだが、textareaへのテキスト挿入用途では現在も広く動作する） */
+function replaceRange(start, end, text){
+  editor.focus();
+  editor.setSelectionRange(start, end);
+  const ok = document.execCommand('insertText', false, text);
+  if(!ok){
+    // 使えない環境向けのフォールバック（この場合のみ元に戻す履行が壊れる）
+    const value = editor.value;
+    editor.value = value.slice(0, start) + text + value.slice(end);
+  }
+}
+
 function insertBlock(line){
   const start = editor.selectionStart, end = editor.selectionEnd;
   const value = editor.value;
@@ -639,9 +658,8 @@ function insertBlock(line){
   }
 
   const insertText = prefix + line + suffix;
-  editor.value = value.slice(0, start) + insertText + value.slice(end);
+  replaceRange(start, end, insertText);
   const cursorPos = start + prefix.length + line.length + (suffix ? suffix.length : 0);
-  editor.focus();
   editor.setSelectionRange(cursorPos, cursorPos);
   updateCount(); scheduleSave(); schedulePreview();
 }
@@ -653,16 +671,14 @@ function wrapSelection(before, after, placeholder){
 
   if(selected.length > 0){
     const insertText = before + selected + after;
-    editor.value = value.slice(0, start) + insertText + value.slice(end);
+    replaceRange(start, end, insertText);
     const cursorPos = start + insertText.length;
-    editor.focus();
     editor.setSelectionRange(cursorPos, cursorPos);
   } else {
     const insertText = before + placeholder + after;
-    editor.value = value.slice(0, start) + insertText + value.slice(end);
+    replaceRange(start, end, insertText);
     const selStart = start + before.length;
     const selEnd = selStart + placeholder.length;
-    editor.focus();
     editor.setSelectionRange(selStart, selEnd);
   }
   updateCount(); scheduleSave(); schedulePreview();
@@ -675,17 +691,15 @@ function insertRuby(){
 
   if(selected.length > 0){
     const insertText = '{' + selected + '|' + '}';
-    editor.value = value.slice(0, start) + insertText + value.slice(end);
+    replaceRange(start, end, insertText);
     const cursorPos = start + 1 + selected.length + 1; // | と } の間
-    editor.focus();
     editor.setSelectionRange(cursorPos, cursorPos);
   } else {
     const template = '{親文字|るび}';
-    editor.value = value.slice(0, start) + template + value.slice(end);
+    replaceRange(start, end, template);
     // 「親文字」部分を選択状態にする
     const selStart = start + 1;
     const selEnd = selStart + 3;
-    editor.focus();
     editor.setSelectionRange(selStart, selEnd);
   }
   updateCount(); scheduleSave(); schedulePreview();
@@ -714,11 +728,10 @@ function insertHeadingBlock(level){
   else { suffix = '\n\n'; }
 
   const insertText = prefix + line + suffix;
-  editor.value = value.slice(0, start) + insertText + value.slice(end);
+  replaceRange(start, end, insertText);
 
   const textStart = start + prefix.length + hashes.length + 1; // 'hashes ' の後ろ
   const textEnd = textStart + selected.length;
-  editor.focus();
   editor.setSelectionRange(textStart, textEnd);
   updateCount(); scheduleSave(); schedulePreview();
 }
@@ -731,10 +744,9 @@ function insertLink(){
   const before = '[' + text + '](';
   const urlPlaceholder = 'URL';
   const after = ')';
-  editor.value = value.slice(0, start) + before + urlPlaceholder + after + value.slice(end);
+  replaceRange(start, end, before + urlPlaceholder + after);
   const selStart = start + before.length;
   const selEnd = selStart + urlPlaceholder.length;
-  editor.focus();
   editor.setSelectionRange(selStart, selEnd);
   updateCount(); scheduleSave(); schedulePreview();
 }
@@ -747,10 +759,9 @@ function insertImage(){
   const before = '![' + alt + '](';
   const pathPlaceholder = 'img.jpg';
   const after = ')';
-  editor.value = value.slice(0, start) + before + pathPlaceholder + after + value.slice(end);
+  replaceRange(start, end, before + pathPlaceholder + after);
   const selStart = start + before.length;
   const selEnd = selStart + pathPlaceholder.length;
-  editor.focus();
   editor.setSelectionRange(selStart, selEnd);
   updateCount(); scheduleSave(); schedulePreview();
 }
@@ -778,11 +789,10 @@ function insertDividerPage(){
   const closeTag = '</p>\n</div>';
   const block = '==============\n\n' + openTag + selected + closeTag + '\n\n==============';
   const insertText = prefix + block + suffix;
-  editor.value = value.slice(0, start) + insertText + value.slice(end);
+  replaceRange(start, end, insertText);
 
   const titleStart = start + prefix.length + '=============='.length + '\n\n'.length + openTag.length;
   const titleEnd = titleStart + selected.length;
-  editor.focus();
   editor.setSelectionRange(titleStart, titleEnd);
   updateCount(); scheduleSave(); schedulePreview();
 }
@@ -806,13 +816,12 @@ function handleAction(action, snippet, level){
 
 function insertAtCursorRaw(text){
   const start = editor.selectionStart, end = editor.selectionEnd;
-  const value = editor.value;
-  editor.value = value.slice(0, start) + text + value.slice(end);
+  replaceRange(start, end, text);
   const cursorPos = start + text.length;
-  editor.focus();
   editor.setSelectionRange(cursorPos, cursorPos);
   updateCount(); scheduleSave(); schedulePreview();
 }
+
 
 toolbar.addEventListener('click', (e)=>{
   const btn = e.target.closest('button[data-action]');
@@ -951,7 +960,7 @@ document.getElementById('batchTcyBtn').addEventListener('click', ()=>{
     showToast('変換できる箇所が見つかりませんでした');
     return;
   }
-  editor.value = temp;
+  replaceRange(0, text.length, temp);
   updateCount(); scheduleSave(); schedulePreview();
   editor.scrollTop = scrollTop;
   showToast(count + '箇所を縦中横に変換しました');
@@ -968,10 +977,10 @@ document.getElementById('clearModalBackdrop').addEventListener('click', (e)=>{
   if(e.target.id === 'clearModalBackdrop') e.target.classList.remove('show');
 });
 document.getElementById('clearConfirm').addEventListener('click', ()=>{
-  editor.value = '';
+  replaceRange(0, editor.value.length, '');
   updateCount(); scheduleSave(); schedulePreview();
   document.getElementById('clearModalBackdrop').classList.remove('show');
-  showToast('消去しました');
+  showToast('消去しました（⌘Zで元に戻せます）');
 });
 
 /* ===== タブ切り替え ===== */
