@@ -539,11 +539,17 @@ function parseDenden(text){
   // ブロック分割の前に丸ごと検出してプレースホルダーに置き換える。
   const partTitles = []; // { level, content }
 
+  // 内側を<span>で1つにまとめている場合、表示用にそのラッパーだけ取り除く
+  function stripSpanWrapper(inner){
+    const m = inner.trim().match(/^<span[^>]*>([\s\S]*)<\/span>$/i);
+    return m ? m[1] : inner;
+  }
+
   // 新方式：見出しタグ（h1〜h6）に直接スタイルを当てたもの（章扉）
   let normalizedText = text.replace(
     /<h([1-6])[^>]*class="denden-center-page"[^>]*>([\s\S]*?)<\/h\1>/gi,
     (m, level, inner)=>{
-      const content = inner.replace(/\n+/g, '').trim();
+      const content = stripSpanWrapper(inner).replace(/\n+/g, '').trim();
       partTitles.push({ level: parseInt(level, 10), content });
       return '\n\n\u0001PARTTITLE' + (partTitles.length - 1) + '\u0001\n\n';
     }
@@ -554,7 +560,7 @@ function parseDenden(text){
   normalizedText = normalizedText.replace(
     /<p[^>]*class="denden-center-text"[^>]*>([\s\S]*?)<\/p>/gi,
     (m, inner)=>{
-      centerTexts.push(inner.replace(/\n+/g, '').trim());
+      centerTexts.push(stripSpanWrapper(inner).replace(/\n+/g, '').trim());
       return '\n\n\u0001CENTERTEXT' + (centerTexts.length - 1) + '\u0001\n\n';
     }
   );
@@ -836,9 +842,10 @@ function insertDividerPage(){
   else { suffix = '\n\n'; }
 
   // div+pではなく見出しタグ(h2)自体にスタイルを当てる。
-  // これで「中央寄せ」と「本物の見出し（目次等に反映される）」を両立できる。
-  const openTag = '<h2 class="denden-center-page" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;height:100vh;" markdown="1">';
-  const closeTag = '</h2>';
+  // 中身はさらに内側のspanで1つにまとめておく（flexの直接の子が複数になると、
+  // 文字や縦中横のspanがそれぞれ別の列に分解されてしまうため）。
+  const openTag = '<h2 class="denden-center-page" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;height:100vh;" markdown="1"><span>';
+  const closeTag = '</span></h2>';
   const block = '==============\n\n' + openTag + selected + closeTag + '\n\n==============';
   const insertText = prefix + block + suffix;
   replaceRange(start, end, insertText);
@@ -869,8 +876,9 @@ function insertCenterText(){
   else { suffix = '\n\n'; }
 
   // 改ページなし。その場の1段落だけを横方向中央寄せにする。
-  const openTag = '<p class="denden-center-text" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;" markdown="1">';
-  const closeTag = '</p>';
+  // ここも内側にspanを1つ挟んで、flexの直接の子要素が複数にならないようにする。
+  const openTag = '<p class="denden-center-text" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;" markdown="1"><span>';
+  const closeTag = '</span></p>';
   const line = openTag + selected + closeTag;
   const insertText = prefix + line + suffix;
   replaceRange(start, end, insertText);
