@@ -523,13 +523,34 @@ const EMPTY_HTML = '<div class="preview-empty">編集タブで本文を入力す
 function parseDenden(text){
   if(!text.trim()) return EMPTY_HTML;
 
-  const blocks = text.split(/\n[ \t]*\n+/);
+  // 扉ページのdivブロックは、内部に空行が入っていても崩れないように、
+  // ブロック分割の前に丸ごと検出してプレースホルダーに置き換える。
+  const partTitles = [];
+  const normalizedText = text.replace(
+    /<div[^>]*class="denden-center-page"[^>]*>([\s\S]*?)<\/div>/gi,
+    (m, inner)=>{
+      const pMatch = inner.match(/<p>([\s\S]*?)<\/p>/i);
+      const content = (pMatch ? pMatch[1] : inner).replace(/\n+/g, '').trim();
+      partTitles.push(content);
+      return '\n\n\u0001PARTTITLE' + (partTitles.length - 1) + '\u0001\n\n';
+    }
+  );
+
+  const blocks = normalizedText.split(/\n[ \t]*\n+/);
   let html = '';
   let pageNum = 1;
 
   blocks.forEach(block=>{
     const trimmed = block.trim();
     if(trimmed === '') return;
+
+    // 扉ページ（横方向中央寄せ）のプレースホルダー
+    const partTitleMatch = trimmed.match(/^\u0001PARTTITLE(\d+)\u0001$/);
+    if(partTitleMatch){
+      const content = partTitles[parseInt(partTitleMatch[1], 10)];
+      html += '<div class="part-title">' + inlineParse(content) + '</div>';
+      return;
+    }
 
     // ブロック全体が改ページ行だけのとき（空行で正しく囲まれているケース）
     if(/^={3,}$/.test(trimmed)){
@@ -540,12 +561,6 @@ function parseDenden(text){
     // ブロック全体が1行あけ指定のとき
     if(/^<p>\s*<br\s*\/?>\s*<\/p>$/i.test(trimmed)){
       html += '<div class="blank-line"></div>';
-      return;
-    }
-    // 扉ページ（横方向中央寄せ）のブロック
-    const dividerMatch = trimmed.match(/^<div[^>]*class="denden-center-page"[^>]*>\s*<p>([\s\S]*?)<\/p>\s*<\/div>$/i);
-    if(dividerMatch){
-      html += '<div class="part-title">' + inlineParse(dividerMatch[1]) + '</div>';
       return;
     }
 
