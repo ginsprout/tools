@@ -454,6 +454,9 @@ function runConvert(){
     notices.push('「!?」「!!」などの記号' + tcyResult.count + '箇所を縦中横に変換しました。');
   }
 
+  // 結合した全体の最初と最後をpage-headerのdivで囲む
+  combined = '<div class="page-header" markdown="1">\n' + combined + '\n</div>';
+
   output.value = combined;
   summaryText.textContent = files.length + '話を結合しました（' + combined.length + '文字）。話の間には改ページ記号を自動で入れています。';
 
