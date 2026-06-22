@@ -1130,9 +1130,12 @@ document.getElementById('batchTcyBtn').addEventListener('click', ()=>{
 
   let count = 0;
   // 半角／全角の ! ? が2〜4文字連続している部分を縦中横に変換（例: !? !! ?? !!? など）
+  // 全角(！？)のままだと-epub-text-combineで詰めた時に間が空きやすいため、
+  // 縦中横にする部分は半角(!?)に統一する。
   temp = temp.replace(/([!?！？]{2,4})/g, (m)=>{
     count++;
-    return '^' + m + '^';
+    const halfWidth = m.replace(/！/g, '!').replace(/？/g, '?');
+    return '^' + halfWidth + '^';
   });
 
   temp = temp.replace(/\u0000(\d+)\u0000/g, (m, idx)=> placeholders[parseInt(idx, 10)]);

@@ -408,9 +408,11 @@ function batchConvertPunctuation(text){
     return '\u0000' + (placeholders.length - 1) + '\u0000';
   });
   let count = 0;
+  // 縦中横にする部分は、間が空きにくい半角(!?)に統一する
   temp = temp.replace(/([!?！？]{2,4})/g, (m)=>{
     count++;
-    return '^' + m + '^';
+    const halfWidth = m.replace(/！/g, '!').replace(/？/g, '?');
+    return '^' + halfWidth + '^';
   });
   temp = temp.replace(/\u0000(\d+)\u0000/g, (m, idx)=> placeholders[parseInt(idx, 10)]);
   return { text: temp, count };
