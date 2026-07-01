@@ -91,7 +91,7 @@
 
   label.field{display:block;margin-bottom:12px;}
   label.field span.field-label{display:block;font-size:0.82rem;color:var(--ink-soft);margin-bottom:4px;}
-  input[type=text], select{
+  input[type=text], select, textarea{
     width:100%;
     padding:10px 11px;
     border:1px solid var(--line);
@@ -101,13 +101,16 @@
     background:#FAF9F5;
     color:var(--ink);
   }
-  input[type=text]:focus, select:focus{outline:2px solid var(--sprout);outline-offset:1px;border-color:var(--sprout);}
+  textarea{resize:vertical;min-height:64px;line-height:1.5;}
+  input[type=text]:focus, select:focus, textarea:focus{outline:2px solid var(--sprout);outline-offset:1px;border-color:var(--sprout);}
 
   .checkline{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
   .checkline input[type=checkbox]{width:19px;height:19px;accent-color:var(--gold);}
   .checkline span{font-size:0.92rem;}
 
   .ingredient-row{display:flex;gap:8px;margin-bottom:8px;}
+  .menu-memo{margin-top:6px;font-size:0.84rem;color:var(--ink-soft);white-space:pre-wrap;word-break:break-word;}
+  .menu-memo a{color:var(--sprout,#5C7A4B);text-decoration:underline;}
   .ingredient-row input.ing-name{flex:2;}
   .ingredient-row input.ing-amount{flex:1;}
   .ingredient-row button.remove-row{
@@ -287,6 +290,11 @@
         <span class="field-label">材料（任意・入れなくてもOK）</span>
         <div id="ingredientRows"></div>
         <button type="button" class="ghost-add" onclick="addIngredientRow()">＋ 材料を追加</button>
+
+        <label class="field" style="margin-top:14px;">
+          <span class="field-label">メモ（レシピURLなど・任意）</span>
+          <textarea id="menuMemoInput" placeholder="レシピのURLや作り方のメモなど自由に書けます"></textarea>
+        </label>
 
         <div class="btn-row">
           <button type="button" class="primary" id="menuSubmitBtn" onclick="submitMenuForm()">追加する</button>
@@ -472,6 +480,7 @@ function resetMenuForm(){
   document.getElementById('menuNameInput').value = '';
   document.getElementById('menuTagInput').value = '';
   document.getElementById('menuFavInput').checked = false;
+  document.getElementById('menuMemoInput').value = '';
   document.getElementById('ingredientRows').innerHTML = '';
   addIngredientRow();
   editingMenuId = null;
@@ -489,6 +498,7 @@ function editMenu(id){
   document.getElementById('menuNameInput').value = m.name;
   document.getElementById('menuTagInput').value = m.tag || '';
   document.getElementById('menuFavInput').checked = !!m.favorite;
+  document.getElementById('menuMemoInput').value = m.memo || '';
   const container = document.getElementById('ingredientRows');
   container.innerHTML = '';
   if(m.ingredients && m.ingredients.length){
@@ -524,6 +534,10 @@ function getUsageCount(menuId){
   });
   return count;
 }
+function linkifyMemo(str){
+  const escaped = escapeHtml(str);
+  return escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
 function renderMenuList(){
   const container = document.getElementById('menuListContainer');
   if(menus.length === 0){
@@ -542,11 +556,13 @@ function renderMenuList(){
     if(m.tag) badges += `<span class="badge tag">${escapeHtml(m.tag)}</span>`;
     if(ingCount) badges += `<span class="badge usage">材料${ingCount}点</span>`;
     if(usage) badges += `<span class="badge usage">使用${usage}回</span>`;
+    const memoHtml = (m.memo && m.memo.trim()) ? `<div class="menu-memo">${linkifyMemo(m.memo.trim())}</div>` : '';
     return `
       <div class="menu-item">
         <div>
           <div class="menu-name">${escapeHtml(m.name)}</div>
           <div>${badges}</div>
+          ${memoHtml}
         </div>
         <div class="menu-actions">
           <button onclick="editMenu('${m.id}')">編集</button>
@@ -565,14 +581,15 @@ function submitMenuForm(){
   }
   const tag = document.getElementById('menuTagInput').value;
   const favorite = document.getElementById('menuFavInput').checked;
+  const memo = document.getElementById('menuMemoInput').value.trim();
   const ingredients = collectIngredientRows();
   if(editingMenuId){
     const idx = menus.findIndex(m=>m.id===editingMenuId);
     if(idx > -1){
-      menus[idx] = {...menus[idx], name, tag, favorite, ingredients};
+      menus[idx] = {...menus[idx], name, tag, favorite, memo, ingredients};
     }
   }else{
-    menus.push({id: uid(), name, tag, favorite, ingredients, createdAt: Date.now()});
+    menus.push({id: uid(), name, tag, favorite, memo, ingredients, createdAt: Date.now()});
   }
   saveJSON(STORAGE_KEYS.menus, menus);
   const wasEditing = !!editingMenuId;
