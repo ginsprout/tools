@@ -6,6 +6,8 @@
 <title>Idea Catcher — Ginsprout</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Noto+Serif+JP:wght@300;400;500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root {
     --ink:       #1a1a2e;
@@ -564,6 +566,8 @@
     <div class="backup-actions">
       <button class="btn-backup" onclick="exportIdeas()">⇩ バックアップ</button>
       <button class="btn-backup" onclick="document.getElementById('import-file').click()">⇧ 復元</button>
+      <button class="btn-backup" onclick="exportText()">📝 テキスト</button>
+      <button class="btn-backup" onclick="exportPDF()">📄 PDF</button>
       <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importIdeas(event)">
     </div>
   </div>
@@ -829,6 +833,88 @@ function importIdeas(event) {
   };
   reader.readAsText(file);
   event.target.value = '';
+}
+
+/* ── テキスト書き出し ── */
+function exportText() {
+  const ideas = loadIdeas();
+  if (!ideas.length) { showToast('書き出すアイデアがありません'); return; }
+
+  const text = ideas.map(idea => {
+    const lines = [`■ ${idea.title}`, formatDate(idea.createdAt)];
+    if (idea.tags.length) lines.push(`タグ: ${idea.tags.join(', ')}`);
+    if (idea.memo) lines.push('', idea.memo);
+    return lines.join('\n');
+  }).join('\n\n----------------------------------------\n\n');
+
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `idea-catcher_${stamp}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  showToast('テキストをダウンロードしました');
+}
+
+/* ── PDF書き出し（html2canvas + jsPDFで画像として組版、日本語も正しく表示） ── */
+async function exportPDF() {
+  const ideas = loadIdeas();
+  if (!ideas.length) { showToast('書き出すアイデアがありません'); return; }
+  if (!window.html2canvas || !window.jspdf) { showToast('PDF機能の読み込みに失敗しました（オフライン？）'); return; }
+
+  showToast('PDFを作成中…');
+
+  const sheet = document.createElement('div');
+  sheet.style.cssText = 'position:fixed; left:-9999px; top:0; width:700px; background:#fff; color:#1a1a2e; font-family:"Noto Serif JP", serif; padding:36px;';
+  sheet.innerHTML = `
+    <div style="font-size:20px; font-weight:500; margin-bottom:6px;">Ginsprout — Idea Catcher</div>
+    <div style="font-size:11px; color:#888; margin-bottom:28px;">書き出し日: ${formatDate(new Date().toISOString())}（全${ideas.length}件）</div>
+    ${ideas.map(idea => `
+      <div style="margin-bottom:22px; padding-bottom:18px; border-bottom:1px solid #ddd;">
+        <div style="font-size:15px; font-weight:500; margin-bottom:6px;">${escHtml(idea.title)}</div>
+        <div style="font-size:10.5px; color:#888; margin-bottom:8px;">${formatDate(idea.createdAt)}${idea.tags.length ? '　／　' + idea.tags.map(escHtml).join('、') : ''}</div>
+        ${idea.memo ? `<div style="font-size:12px; line-height:1.8; white-space:pre-wrap;">${escHtml(idea.memo)}</div>` : ''}
+      </div>
+    `).join('')}
+  `;
+  document.body.appendChild(sheet);
+
+  try {
+    const canvas = await html2canvas(sheet, { scale: 2, backgroundColor: '#ffffff' });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'pt', 'a4');
+    const pageWidth  = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth   = pageWidth;
+    const imgHeight  = canvas.height * imgWidth / canvas.width;
+    const imgData    = canvas.toDataURL('image/png');
+
+    let heightLeft = imgHeight;
+    let position = 0;
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    pdf.save(`idea-catcher_${stamp}.pdf`);
+    showToast('PDFをダウンロードしました');
+  } catch (e) {
+    showToast('PDFの作成に失敗しました');
+  } finally {
+    sheet.remove();
+  }
 }
 
 function escHtml(s) {
