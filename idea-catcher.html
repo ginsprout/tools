@@ -259,6 +259,13 @@
     max-width: 680px;
     margin-top: 44px;
   }
+  .archive-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
   .archive-toggle {
     background: none;
     border: none;
@@ -277,6 +284,24 @@
   .archive-toggle:hover { color: var(--paper-dim); }
   .toggle-arrow { transition: transform .3s; display: inline-block; }
   .toggle-arrow.open { transform: rotate(90deg); }
+
+  .backup-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .btn-backup {
+    background: none;
+    border: 1px solid #3a3550;
+    color: var(--ghost);
+    padding: 5px 12px;
+    border-radius: 2px;
+    font-size: .68rem;
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: .05em;
+    transition: border-color .2s, color .2s;
+  }
+  .btn-backup:hover { border-color: var(--teal); color: var(--teal-dim); }
 
   #archive-list {
     margin-top: 16px;
@@ -531,10 +556,17 @@
 
 <!-- アーカイブ -->
 <div class="archive-section">
-  <button class="archive-toggle" onclick="toggleArchive()">
-    <span class="toggle-arrow" id="toggle-arrow">▶</span>
-    <span id="archive-count-label">すべてのアイデア</span>
-  </button>
+  <div class="archive-header">
+    <button class="archive-toggle" onclick="toggleArchive()">
+      <span class="toggle-arrow" id="toggle-arrow">▶</span>
+      <span id="archive-count-label">すべてのアイデア</span>
+    </button>
+    <div class="backup-actions">
+      <button class="btn-backup" onclick="exportIdeas()">⇩ バックアップ</button>
+      <button class="btn-backup" onclick="document.getElementById('import-file').click()">⇧ 復元</button>
+      <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importIdeas(event)">
+    </div>
+  </div>
   <div id="archive-list"></div>
 </div>
 
@@ -754,6 +786,49 @@ function saveEdit() {
   closeModal();
   showToast('更新しました');
   renderAll();
+}
+
+/* ── バックアップ／復元 ── */
+function exportIdeas() {
+  const ideas = loadIdeas();
+  if (!ideas.length) { showToast('バックアップするアイデアがありません'); return; }
+
+  const blob = new Blob([JSON.stringify(ideas, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `idea-catcher-backup_${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  showToast('バックアップをダウンロードしました');
+}
+
+function importIdeas(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    let imported;
+    try { imported = JSON.parse(reader.result); }
+    catch { showToast('ファイルを読み込めませんでした'); return; }
+    if (!Array.isArray(imported)) { showToast('バックアップファイルの形式が正しくありません'); return; }
+
+    const current = loadIdeas();
+    const existingIds = new Set(current.map(i => i.id));
+    const newOnes = imported.filter(i => i && i.id && !existingIds.has(i.id));
+    saveIdeas(current.concat(newOnes));
+    renderAll();
+
+    showToast(newOnes.length ? `${newOnes.length}件のアイデアを復元しました` : '新しいアイデアはありませんでした');
+  };
+  reader.readAsText(file);
+  event.target.value = '';
 }
 
 function escHtml(s) {
