@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Idea Catcher — Ginsprout</title>
+<title>Idea Catcher (Public) — Ginsprout</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Noto+Serif+JP:wght@300;400;500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -95,35 +95,6 @@
     margin-bottom: 20px;
     white-space: pre-wrap;
   }
-  .card-divider {
-    border: none;
-    border-top: 1px solid var(--paper-dim);
-    margin: 0 0 18px;
-  }
-  .ai-label {
-    font-size: .6rem;
-    letter-spacing: .2em;
-    text-transform: uppercase;
-    color: var(--teal);
-    margin-bottom: 8px;
-  }
-  #ai-comment {
-    font-size: .9rem;
-    line-height: 1.8;
-    color: #3d3830;
-    min-height: 1.8em;
-  }
-  .cursor {
-    display: inline-block;
-    width: 1px;
-    height: 1em;
-    background: var(--teal);
-    margin-left: 1px;
-    vertical-align: text-bottom;
-    animation: blink .9s step-end infinite;
-  }
-  @keyframes blink { 50% { opacity: 0; } }
-
   .card-meta {
     margin-top: 16px;
     font-size: .68rem;
@@ -503,19 +474,6 @@
     z-index: 999;
   }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-  /* ── スピナー ── */
-  .spinner {
-    display: inline-block;
-    width: 12px; height: 12px;
-    border: 2px solid var(--paper-dim);
-    border-top-color: var(--teal);
-    border-radius: 50%;
-    animation: spin .7s linear infinite;
-    vertical-align: middle;
-    margin-right: 6px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -525,21 +483,17 @@
   <span class="brand-sub">Idea Catcher</span>
 </header>
 
-<!-- AIピックアップカード -->
+<!-- ピックアップカード -->
 <div id="ai-card" style="display:none">
-  <div class="card-eyebrow">Today's pickup — AI selected</div>
+  <div class="card-eyebrow">Today's pickup</div>
   <div class="card-idea-title" id="card-title"></div>
   <div class="card-idea-memo" id="card-memo"></div>
-  <hr class="card-divider">
-  <div class="ai-label">AI comment</div>
-  <div id="ai-comment"></div>
   <div class="card-meta">
     <span id="card-date"></span>
     <span id="card-tags"></span>
   </div>
   <div class="card-actions">
     <button class="btn-ghost" onclick="pickRandom()">▶ 別のアイデアを見る</button>
-    <button class="btn-ghost" onclick="regenComment()">↺ コメントを更新</button>
   </div>
 </div>
 
@@ -633,10 +587,10 @@ function saveIdea() {
   renderAll();
 }
 
-/* ── ランダムピック + AIコメント ── */
+/* ── ランダムピック ── */
 let currentPickId = null;
 
-async function pickRandom(ideaOverride) {
+function pickRandom(ideaOverride) {
   const ideas = loadIdeas();
   if (!ideas.length) {
     document.getElementById('ai-card').style.display = 'none';
@@ -666,59 +620,6 @@ async function pickRandom(ideaOverride) {
 
   const tagsEl = document.getElementById('card-tags');
   tagsEl.innerHTML = idea.tags.map(t => `<span class="card-tag">${t}</span>`).join('');
-
-  await fetchAIComment(idea);
-}
-
-async function regenComment() {
-  const ideas = loadIdeas();
-  const idea  = ideas.find(i => i.id === currentPickId);
-  if (!idea) return;
-  await fetchAIComment(idea);
-}
-
-async function fetchAIComment(idea) {
-  const el = document.getElementById('ai-comment');
-  el.innerHTML = '<span class="spinner"></span>';
-
-  const prompt = `あなたはアイデアの価値を見抜くコンサルタントです。
-以下のアイデアを読み、2〜3文の短いコメントを書いてください。
-コメントのポイント：
-- 現在の技術・デザイン・創作・フリーランス・AI活用などのトレンドと照らし合わせて、このアイデアの今日的な価値や可能性を指摘する
-- または、忘れていたこのアイデアを「今こそ」動かすきっかけになるような視点を提供する
-- 日本語で、知的でドライな語り口で（ゆるすぎず、重すぎず）
-
-アイデアタイトル：${idea.title}
-メモ：${idea.memo || '（なし）'}
-タグ：${idea.tags.join(', ') || '（なし）'}
-記録日：${formatDate(idea.createdAt)}
-
-返答はコメント本文のみ。余計な前置きや「はい」「わかりました」は不要。`;
-
-  try {
-    const res = await fetch('https://ginsprout-proxy.yumco-taka.workers.dev/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const data = await res.json();
-    const text = data.content?.find(b => b.type === 'text')?.text || 'コメントを取得できませんでした。';
-    typewrite(el, text);
-  } catch (e) {
-    el.textContent = 'AIコメントを取得できませんでした（オフライン？）';
-  }
-}
-
-function typewrite(el, text, i = 0) {
-  if (i === 0) el.innerHTML = '';
-  if (i >= text.length) return;
-  el.innerHTML = text.slice(0, i + 1) + '<span class="cursor"></span>';
-  const delay = text[i] === '。' || text[i] === '、' ? 60 : 18;
-  setTimeout(() => typewrite(el, text, i + 1), delay);
 }
 
 /* ── アーカイブ ── */
