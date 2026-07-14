@@ -47,8 +47,25 @@
     font-size:1.6rem;
     margin:0 0 4px;
     letter-spacing:0.02em;
+    display:flex;
+    align-items:center;
+    gap:8px;
   }
-  .subtitle{color:var(--ink-soft);font-size:0.88rem;margin:0;}
+  .title-icon{font-size:1.4rem;line-height:1;}
+  .subtitle{color:var(--ink-soft);font-size:0.88rem;margin:0 0 12px;}
+
+  .backup-row{display:flex;flex-wrap:wrap;gap:8px;}
+  .backup-btn{
+    display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);
+    border-radius:99px;padding:7px 13px;font-size:0.78rem;font-family:inherit;
+    cursor:pointer;transition:border-color .15s, color .15s;
+  }
+  .backup-btn:hover{border-color:var(--sprout);color:var(--sprout-deep);}
+  .backup-import-label input[type=file]{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
 
   nav.tabs{
     display:flex;
@@ -253,8 +270,15 @@
 <div class="wrap">
 
   <header class="app-header">
-    <h1>晩ごはんローテーション</h1>
+    <h1><span class="title-icon" aria-hidden="true">🍅</span>晩ごはんローテーション</h1>
     <p class="subtitle">メニューを登録して、週の予定を組み、買い物リストをつくる。</p>
+    <div class="backup-row">
+      <button type="button" class="backup-btn" onclick="exportBackup()">📥 バックアップを保存</button>
+      <label class="backup-btn backup-import-label">
+        📤 復元する
+        <input type="file" id="importFileInput" accept="application/json,.json" onchange="importBackup(event)">
+      </label>
+    </div>
   </header>
 
   <nav class="tabs">
@@ -433,6 +457,69 @@ function showHint(msg){
   el.classList.add('show');
   if(hintTimer) clearTimeout(hintTimer);
   hintTimer = setTimeout(()=>{ el.classList.remove('show'); }, 2600);
+}
+
+/* ===================== バックアップ ===================== */
+function exportBackup(){
+  const data = {
+    app: 'ginsprout-dinner-rotation',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    menus,
+    weeks,
+    shoppingList,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `晩ごはんローテーション_バックアップ_${toKey(new Date())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showHint('バックアップを保存しました');
+}
+function importBackup(event){
+  const input = event.target;
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    let data;
+    try{
+      data = JSON.parse(e.target.result);
+      if(!data || typeof data !== 'object') throw new Error('invalid format');
+    }catch(err){
+      console.error('復元失敗', err);
+      showHint('読み込みに失敗しました。正しいバックアップファイルか確認してください。');
+      input.value = '';
+      return;
+    }
+    if(!confirm('現在のデータを上書きして復元します。この操作は取り消せません。よろしいですか？')){
+      input.value = '';
+      return;
+    }
+    menus = Array.isArray(data.menus) ? data.menus : [];
+    weeks = (data.weeks && typeof data.weeks === 'object' && !Array.isArray(data.weeks)) ? data.weeks : {};
+    shoppingList = Array.isArray(data.shoppingList) ? data.shoppingList : [];
+    saveJSON(STORAGE_KEYS.menus, menus);
+    saveJSON(STORAGE_KEYS.weeks, weeks);
+    saveJSON(STORAGE_KEYS.shopping, shoppingList);
+    editingMenuId = null;
+    armedMenuId = null;
+    resetMenuForm();
+    renderMenuList();
+    renderWeekView();
+    renderShoppingList();
+    input.value = '';
+    showHint('バックアップから復元しました');
+  };
+  reader.onerror = function(){
+    showHint('ファイルの読み込みに失敗しました。');
+    input.value = '';
+  };
+  reader.readAsText(file);
 }
 
 /* ===================== タブ切り替え ===================== */
