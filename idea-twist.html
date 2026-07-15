@@ -299,6 +299,47 @@
     color: var(--rose);
     line-height: 1.7;
   }
+
+  /* Export actions */
+  .export-actions {
+    display: none;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .export-actions.show { display: flex; }
+
+  .btn-export {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .btn-export:hover { border-color: var(--teal); color: var(--teal); background: var(--teal-soft); }
+
+  @media print {
+    header, .card, .loading, .export-actions { display: none !important; }
+    body { background: #fff; color: #111; }
+    .main { max-width: 100%; padding: 0; }
+    .results-header { color: #555; }
+    .idea-card {
+      background: #fff;
+      border: 1px solid #ccc;
+      break-inside: avoid;
+      box-shadow: none;
+    }
+    .idea-scenario, .idea-why { color: #333; }
+    .idea-why { background: #f4f4f4; }
+  }
 </style>
 </head>
 <body>
@@ -340,6 +381,10 @@
 
   <div class="results" id="results">
     <div class="results-header">✦ 変換されたアイデア</div>
+    <div class="export-actions" id="exportActions">
+      <button class="btn-export" onclick="exportText()">📝 テキストで保存</button>
+      <button class="btn-export" onclick="exportPDF()">🖨️ PDFで保存（印刷）</button>
+    </div>
     <div id="cards"></div>
   </div>
 
@@ -435,9 +480,14 @@
     return JSON.parse(clean);
   }
 
+  // 生成済みアイデアの記録（テキスト/PDF出力用）
+  let generatedIdeas = [];
+  let generatedInput = '';
+
   function appendCard(idea, index) {
     const cards = document.getElementById('cards');
     const results = document.getElementById('results');
+    const exportActions = document.getElementById('exportActions');
     const typeClass = getTypeClass(idea.frame);
 
     const card = document.createElement('div');
@@ -453,6 +503,57 @@
     `;
     cards.appendChild(card);
     results.classList.add('show');
+    exportActions.classList.add('show');
+    generatedIdeas.push(idea);
+  }
+
+  function formatTimestamp() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+  }
+
+  function buildExportText() {
+    const lines = [];
+    lines.push('✦ アイデア昇華ツール - 出力メモ');
+    lines.push(`生成日時: ${new Date().toLocaleString('ja-JP')}`);
+    lines.push('');
+    lines.push('【元のアイデア】');
+    lines.push(generatedInput);
+    lines.push('');
+    lines.push('='.repeat(40));
+    generatedIdeas.forEach((idea, i) => {
+      lines.push('');
+      lines.push(`${i + 1}. 【${idea.frame}】${idea.title}`);
+      lines.push('');
+      lines.push('シナリオ:');
+      lines.push(idea.scenario);
+      lines.push('');
+      lines.push('なぜ効くか:');
+      lines.push(idea.why_it_works);
+      lines.push('');
+      lines.push('-'.repeat(40));
+    });
+    return lines.join('\n');
+  }
+
+  function exportText() {
+    if (generatedIdeas.length === 0) return;
+    const text = buildExportText();
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `idea-twist_${formatTimestamp()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function exportPDF() {
+    if (generatedIdeas.length === 0) return;
+    window.print();
   }
 
   async function twist() {
@@ -463,11 +564,15 @@
     const loading = document.getElementById('loading');
     const results = document.getElementById('results');
     const cards = document.getElementById('cards');
+    const exportActions = document.getElementById('exportActions');
 
     runBtn.disabled = true;
     loading.classList.add('show');
     results.classList.remove('show');
+    exportActions.classList.remove('show');
     cards.innerHTML = '';
+    generatedIdeas = [];
+    generatedInput = input;
 
     const frames = pickFrames();
     let hasError = false;
