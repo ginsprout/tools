@@ -88,10 +88,11 @@
     display:flex;align-items:center;justify-content:center;}
   .add-btn:active{background:var(--sprout-line);}
 
-  /* freee check */
+  /* confirmation checks (freee / mindmap / …) */
   .check-row{display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer;font-size:14.5px;font-weight:700;
     font-family:"Zen Maru Gothic",sans-serif;}
   .check-row input[type="checkbox"]{width:22px;height:22px;accent-color:var(--sprout-deep);flex-shrink:0;}
+  .check-row + .check-row{margin-top:2px;padding-top:10px;border-top:1px solid var(--line);}
 
   /* goal */
   .goal-card textarea{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px 13px;
@@ -131,7 +132,7 @@
     border-radius:999px;padding:2px 8px;}
   .log-counts{flex:1;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;font-size:12.5px;color:var(--ink-soft);}
   .mini-count{background:var(--bg);border-radius:999px;padding:2px 8px;}
-  .mini-freee{background:var(--clay-soft);color:var(--clay-deep);border-radius:999px;padding:2px 8px;font-weight:700;}
+  .mini-check{background:var(--clay-soft);color:var(--clay-deep);border-radius:999px;padding:2px 8px;font-weight:700;}
   .log-caret{color:var(--ink-soft);font-size:11px;flex-shrink:0;}
   .log-row-body{padding:4px 16px 16px;border-top:1px solid var(--line);}
   .log-row-body .cat-block{margin-top:14px;}
@@ -198,14 +199,27 @@ function isInWeek(dateKey, mondayKey){
 /* ---------- storage (localStorage now; swap-friendly for IndexedDB/Supabase later) ---------- */
 const STORAGE_KEY = "skssDaily.v1.entries";
 
+const CHECKS = [
+  { key: "freee",   emoji: "💰", label: "freee確認済み",         badge: "💰済" }, // source: future 'freee-api' etc.
+  { key: "mindmap", emoji: "🧠", label: "マインドマップ確認済み", badge: "🧠済" },
+];
+
 function createEmptyEntry(dateKey){
-  return {
+  const entry = {
     date: dateKey,
     seed: [], root: [], branch: [], bloom: [],
-    freee: { checked: false, checkedAt: null, source: "manual" }, // source: future 'freee-api' etc.
     todayGoal: "",
     updatedAt: null,
   };
+  for (const c of CHECKS) entry[c.key] = { checked: false, checkedAt: null, source: "manual" };
+  return entry;
+}
+
+// fills in any check fields missing from entries saved before a new check was added
+function normalizeEntry(raw, dateKey){
+  const entry = { ...createEmptyEntry(dateKey), ...raw };
+  for (const c of CHECKS) entry[c.key] = { ...createEmptyEntry(dateKey)[c.key], ...(raw[c.key] || {}) };
+  return entry;
 }
 
 const Store = {
@@ -227,7 +241,7 @@ const Store = {
   },
   get(dateKey){
     const all = this._readAll();
-    return all[dateKey] || createEmptyEntry(dateKey);
+    return all[dateKey] ? normalizeEntry(all[dateKey], dateKey) : createEmptyEntry(dateKey);
   },
   save(entry){
     const all = this._readAll();
@@ -322,6 +336,16 @@ function renderCategoryBlock(scope, entry, cat){
     </div>`;
 }
 
+function renderCheckRow(scope, entry, check){
+  const id = `check-${check.key}-${scope}-${entry.date}`;
+  return `
+    <label class="check-row" for="${id}">
+      <input type="checkbox" id="${id}" data-action="toggle-check"
+        data-field="${check.key}" data-date="${entry.date}" ${entry[check.key].checked ? "checked" : ""}>
+      <span>${check.emoji} ${esc(check.label)}</span>
+    </label>`;
+}
+
 function renderTodayView(){
   const entry = getEntry(todayKey());
   const weekCount = weeklyBloomCount();
@@ -338,11 +362,7 @@ function renderTodayView(){
     </section>
 
     <section class="card">
-      <label class="check-row" for="freee-check-${entry.date}">
-        <input type="checkbox" id="freee-check-${entry.date}" data-action="toggle-freee"
-          data-date="${entry.date}" ${entry.freee.checked ? "checked" : ""}>
-        <span>💰 freee確認済み</span>
-      </label>
+      ${CHECKS.map((c) => renderCheckRow("today", entry, c)).join("")}
     </section>
 
     <section class="card goal-card">
@@ -364,24 +384,20 @@ function renderLogRow(date){
   const entry = getEntry(date);
   const expanded = state.expandedDate === date;
   const counts = CATEGORIES.map((c) => `<span class="mini-count">${c.emoji}${entry[c.key].length}</span>`).join("");
-  const freeeBadge = entry.freee.checked ? `<span class="mini-freee">💰済</span>` : "";
+  const checkBadges = CHECKS.filter((c) => entry[c.key].checked).map((c) => `<span class="mini-check">${c.badge}</span>`).join("");
   const isToday = date === todayKey();
 
   return `
     <div class="log-row ${expanded ? "expanded" : ""}">
       <button type="button" class="log-row-head" data-action="toggle-log" data-date="${date}">
         <span class="log-date">${esc(formatJP(date))}${isToday ? '<span class="today-tag">今日</span>' : ""}</span>
-        <span class="log-counts">${counts}${freeeBadge}</span>
+        <span class="log-counts">${counts}${checkBadges}</span>
         <span class="log-caret">${expanded ? "▲" : "▼"}</span>
       </button>
       ${expanded ? `
         <div class="log-row-body">
           ${CATEGORIES.map((cat) => renderCategoryBlock(`log-${date}`, entry, cat)).join("")}
-          <label class="check-row" for="freee-check-log-${date}">
-            <input type="checkbox" id="freee-check-log-${date}" data-action="toggle-freee"
-              data-date="${date}" ${entry.freee.checked ? "checked" : ""}>
-            <span>💰 freee確認済み</span>
-          </label>
+          ${CHECKS.map((c) => renderCheckRow(`log-${date}`, entry, c)).join("")}
           <div class="goal-edit">
             <div class="cat-label"><span>🌸 今日の咲候補</span></div>
             <textarea rows="2" data-action="edit-goal" data-date="${date}">${esc(entry.todayGoal)}</textarea>
@@ -444,10 +460,10 @@ function handleRemoveItem(date, cat, index){
   render();
 }
 
-function handleToggleFreee(date, checked){
+function handleToggleCheck(date, field, checked){
   const entry = getEntry(date);
-  entry.freee.checked = checked;
-  entry.freee.checkedAt = checked ? new Date().toISOString() : null;
+  entry[field].checked = checked;
+  entry[field].checkedAt = checked ? new Date().toISOString() : null;
   persistEntry(date);
   render();
 }
@@ -504,9 +520,9 @@ app.addEventListener("click", (e) => {
 });
 
 app.addEventListener("change", (e) => {
-  const el = e.target.closest('[data-action="toggle-freee"]');
+  const el = e.target.closest('[data-action="toggle-check"]');
   if (!el) return;
-  handleToggleFreee(el.dataset.date, el.checked);
+  handleToggleCheck(el.dataset.date, el.dataset.field, el.checked);
 });
 
 app.addEventListener("input", (e) => {
@@ -515,8 +531,18 @@ app.addEventListener("input", (e) => {
   handleEditGoal(el.dataset.date, el.value);
 });
 
+// IME (日本語入力) の変換確定Enterで誤って追加されないよう、変換中は無視する
+let composing = false;
+app.addEventListener("compositionstart", (e) => {
+  if (e.target.closest('[data-action="add-input"]')) composing = true;
+});
+app.addEventListener("compositionend", (e) => {
+  if (e.target.closest('[data-action="add-input"]')) composing = false;
+});
+
 app.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
+  if (composing || e.isComposing || e.keyCode === 229) return;
   const el = e.target.closest('[data-action="add-input"]');
   if (!el) return;
   e.preventDefault();
