@@ -287,7 +287,6 @@ const state = {
   view: "today",       // 'today' | 'logs'
   expandedDate: null,
   showAllLogs: false,
-  focusAfterRender: null,
 };
 
 /* ---------- escaping ---------- */
@@ -301,11 +300,6 @@ function esc(s){
 function render(){
   const app = document.getElementById("app");
   app.innerHTML = state.view === "today" ? renderTodayView() : renderLogsView();
-  if (state.focusAfterRender) {
-    const el = document.getElementById(state.focusAfterRender);
-    if (el) el.focus();
-    state.focusAfterRender = null;
-  }
 }
 
 function renderCategoryBlock(scope, entry, cat){
@@ -383,7 +377,7 @@ function renderTodayView(){
 function renderLogRow(date){
   const entry = getEntry(date);
   const expanded = state.expandedDate === date;
-  const counts = CATEGORIES.map((c) => `<span class="mini-count">${c.emoji}${entry[c.key].length}</span>`).join("");
+  const counts = CATEGORIES.map((c) => `<span class="mini-count" data-cat="${c.key}">${c.emoji}${entry[c.key].length}</span>`).join("");
   const checkBadges = CHECKS.filter((c) => entry[c.key].checked).map((c) => `<span class="mini-check">${c.badge}</span>`).join("");
   const isToday = date === todayKey();
 
@@ -441,16 +435,56 @@ function renderLogsView(){
 }
 
 /* ---------- mutations ---------- */
+// Adding an item patches the DOM in place instead of calling render() (which would
+// replace the whole app innerHTML, including this very input). Rebuilding the input
+// node while the browser's IME composition for the just-confirmed text is still
+// settling caused leftover conversion text to appear in the (new) input afterward.
+// Keeping the same node alive avoids that race and also means the field never loses
+// focus, which is nicer for adding several items in a row.
 function handleAddItem(scope, date, cat, inputId){
   const input = document.getElementById(inputId);
   if (!input) return;
   const val = input.value.trim();
   if (!val) { input.focus(); return; }
   const entry = getEntry(date);
+  const index = entry[cat].length;
   entry[cat].push(val);
   persistEntry(date);
-  state.focusAfterRender = inputId;
-  render();
+  input.value = "";
+  patchAfterAdd(input, date, cat, index, val);
+}
+
+function patchAfterAdd(input, date, cat, index, val){
+  const list = input.closest(".cat-block")?.querySelector(".chip-list");
+  if (list) {
+    const li = document.createElement("li");
+    li.className = "chip";
+    const span = document.createElement("span");
+    span.textContent = val;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip-remove";
+    btn.dataset.action = "remove-item";
+    btn.dataset.date = date;
+    btn.dataset.cat = cat;
+    btn.dataset.index = String(index);
+    btn.setAttribute("aria-label", "削除");
+    btn.textContent = "×";
+    li.append(span, btn);
+    list.appendChild(li);
+  }
+
+  if (cat === "bloom") {
+    const label = `🌸 今週 ${weeklyBloomCount()}件`;
+    document.querySelectorAll(".week-badge").forEach((el) => { el.textContent = label; });
+  }
+
+  const miniCount = input.closest(".log-row")?.querySelector(`.mini-count[data-cat="${cat}"]`);
+  if (miniCount) {
+    const emoji = CATEGORIES.find((c) => c.key === cat).emoji;
+    const current = parseInt(miniCount.textContent.replace(/\D/g, ""), 10) || 0;
+    miniCount.textContent = `${emoji}${current + 1}`;
+  }
 }
 
 function handleRemoveItem(date, cat, index){
