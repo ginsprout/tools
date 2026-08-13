@@ -140,6 +140,11 @@
   .toggle-all{display:block;width:100%;text-align:center;padding:12px;min-height:44px;
     color:var(--sprout-deep);font-weight:700;font-size:13.5px;}
 
+  .backup-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+    min-height:46px;border-radius:14px;background:var(--paper);border:1.5px solid var(--sprout-line);
+    color:var(--sprout-deep);font-weight:700;font-size:13.5px;box-shadow:var(--shadow);margin-bottom:16px;}
+  .backup-btn:active{background:var(--sprout-soft);}
+
   .empty-note{font-size:12.5px;color:var(--ink-soft);text-align:center;padding:10px;}
 
   /* toast */
@@ -419,6 +424,8 @@ function renderLogsView(){
       <div class="week-badge">🌸 今週 ${weekCount}件</div>
     </section>
 
+    <button type="button" class="backup-btn" data-action="export-backup">⬇ バックアップをダウンロード（JSON）</button>
+
     <div class="section-label">直近7日間</div>
     ${recentKeys.map((d) => renderLogRow(d)).join("")}
 
@@ -508,6 +515,25 @@ function handleEditGoal(date, value){
   persistEntry(date);
 }
 
+function handleExportBackup(){
+  const data = {
+    app: "skss-daily",
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    entries: Store._readAll(),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `skss-daily-backup-${todayKey()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast("✓ バックアップをダウンロードしました");
+}
+
 function showToast(msg){
   const toast = document.getElementById("toast");
   toast.textContent = msg;
@@ -550,6 +576,8 @@ app.addEventListener("click", (e) => {
   } else if (action === "toggle-all-logs") {
     state.showAllLogs = !state.showAllLogs;
     render();
+  } else if (action === "export-backup") {
+    handleExportBackup();
   }
 });
 
