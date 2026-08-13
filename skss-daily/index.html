@@ -137,8 +137,14 @@
   .log-row-body{padding:4px 16px 16px;border-top:1px solid var(--line);}
   .log-row-body .cat-block{margin-top:14px;}
 
-  .toggle-all{display:block;width:100%;text-align:center;padding:12px;min-height:44px;
-    color:var(--sprout-deep);font-weight:700;font-size:13.5px;}
+  .month-group{background:var(--paper);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);margin-bottom:10px;overflow:hidden;}
+  .month-group.expanded{border-color:var(--sprout-line);}
+  .month-head{display:flex;align-items:center;gap:10px;width:100%;padding:13px 16px;min-height:44px;text-align:left;}
+  .month-label{font-family:"Zen Maru Gothic",sans-serif;font-weight:700;font-size:14px;flex-shrink:0;}
+  .month-meta{flex:1;text-align:right;font-size:12px;color:var(--ink-soft);}
+  .month-body{padding:12px 12px 2px;border-top:1px solid var(--line);background:var(--bg);}
+  .month-body .log-row{margin-bottom:8px;}
 
   .backup-row{display:flex;gap:10px;margin-bottom:16px;}
   .backup-btn{display:flex;align-items:center;justify-content:center;gap:7px;flex:1;
@@ -293,7 +299,7 @@ function persistEntry(date){
 const state = {
   view: "today",       // 'today' | 'logs'
   expandedDate: null,
-  showAllLogs: false,
+  expandedMonth: null,  // "YYYY-MM" currently open in the "それ以前" section, or null
 };
 
 /* ---------- escaping ---------- */
@@ -413,7 +419,15 @@ function renderLogsView(){
   const weekCount = weeklyBloomCount();
   const recentKeys = Array.from({ length: 7 }, (_, i) => addDays(todayKey(), -i));
   const oldestRecent = recentKeys[recentKeys.length - 1];
-  const older = Store.list().filter((e) => e.date < oldestRecent);
+  const older = Store.list().filter((e) => e.date < oldestRecent); // already newest-first
+
+  const monthGroups = new Map(); // "YYYY-MM" -> entries[], newest month first
+  for (const e of older) {
+    const mk = e.date.slice(0, 7);
+    if (!monthGroups.has(mk)) monthGroups.set(mk, []);
+    monthGroups.get(mk).push(e);
+  }
+  const months = Array.from(monthGroups.entries());
 
   return `
     <div class="logs-header">
@@ -434,16 +448,28 @@ function renderLogsView(){
     <div class="section-label">直近7日間</div>
     ${recentKeys.map((d) => renderLogRow(d)).join("")}
 
-    ${older.length ? `
-      <button type="button" class="toggle-all" data-action="toggle-all-logs">
-        ${state.showAllLogs ? "それ以前の記録を閉じる ▲" : `それ以前の記録を見る（${older.length}件） ▼`}
-      </button>
-      ${state.showAllLogs ? `
-        <div class="section-label">それ以前</div>
-        ${older.map((e) => renderLogRow(e.date)).join("")}
-      ` : ""}
+    ${months.length ? `
+      <div class="section-label">それ以前（月ごと）</div>
+      ${months.map(([mk, entries]) => renderMonthGroup(mk, entries)).join("")}
     ` : `<p class="empty-note">それより前の記録はまだありません</p>`}
   `;
+}
+
+// grouped by month so opening "過去ログ" never has to render hundreds of day rows at once —
+// only the recent 7 days plus whichever month(s) the user has actually opened
+function renderMonthGroup(monthKey, entries){
+  const expanded = state.expandedMonth === monthKey;
+  const [y, m] = monthKey.split("-").map(Number);
+  const bloomCount = entries.reduce((sum, e) => sum + (e.bloom ? e.bloom.length : 0), 0);
+  return `
+    <div class="month-group ${expanded ? "expanded" : ""}">
+      <button type="button" class="month-head" data-action="toggle-month" data-month="${monthKey}">
+        <span class="month-label">${y}年${m}月</span>
+        <span class="month-meta">${entries.length}件 ・ 🌸${bloomCount}</span>
+        <span class="log-caret">${expanded ? "▲" : "▼"}</span>
+      </button>
+      ${expanded ? `<div class="month-body">${entries.map((e) => renderLogRow(e.date)).join("")}</div>` : ""}
+    </div>`;
 }
 
 /* ---------- mutations ---------- */
@@ -638,8 +664,9 @@ app.addEventListener("click", (e) => {
     const date = el.dataset.date;
     state.expandedDate = state.expandedDate === date ? null : date;
     render();
-  } else if (action === "toggle-all-logs") {
-    state.showAllLogs = !state.showAllLogs;
+  } else if (action === "toggle-month") {
+    const month = el.dataset.month;
+    state.expandedMonth = state.expandedMonth === month ? null : month;
     render();
   } else if (action === "export-backup") {
     handleExportBackup();
