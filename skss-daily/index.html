@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SKSS Daily</title>
+<meta name="description" content="毎朝30秒〜1分で、前日の振り返りと今日の目標を記録するシンプルな日次ログ">
+
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#3f6a44">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="SKSS Daily">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#f6f2e9; --paper:#fffdf8; --ink:#2c372e; --ink-soft:#5c6a5d; --line:#e3ddcd;
+    --sprout:#5b8a5a; --sprout-deep:#3f6a44; --sprout-soft:#e7efe1; --sprout-line:#cfe0c6;
+    --clay:#b96b3e; --clay-deep:#9a5128; --clay-soft:#f6e4d6; --clay-line:#ecccb2;
+    --shadow:0 12px 34px -20px rgba(44,55,46,.45); --radius:18px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:"Zen Kaku Gothic New","Hiragino Sans",sans-serif;color:var(--ink);background:var(--bg);
+    background-image:
+      radial-gradient(760px 480px at 8% -10%, rgba(91,138,90,.10), transparent 60%),
+      radial-gradient(700px 520px at 105% 4%, rgba(185,107,62,.08), transparent 60%);
+    line-height:1.6;letter-spacing:.01em;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .shell{max-width:640px;margin:0 auto;padding:18px 16px 48px;}
+
+  /* app header */
+  .app-header{text-align:center;padding:18px 16px 6px;}
+  .app-header .brand{display:inline-flex;align-items:center;gap:8px;
+    font-family:"Zen Maru Gothic",sans-serif;font-weight:700;font-size:19px;color:var(--sprout-deep);}
+  .app-header .brand .emojis{font-size:16px;letter-spacing:1px;}
+
+  button{font:inherit;color:inherit;border:none;background:none;cursor:pointer;}
+  input,textarea{font:inherit;color:inherit;}
+
+  /* top summary */
+  .top-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:14px 18px;margin-bottom:16px;}
+  .date-badge{font-family:"Zen Maru Gothic",sans-serif;font-weight:700;font-size:16.5px;}
+  .week-badge{font-size:13px;font-weight:700;color:var(--clay-deep);background:var(--clay-soft);
+    border:1px solid var(--clay-line);border-radius:999px;padding:6px 12px;white-space:nowrap;}
+
+  /* cards */
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:18px;margin-bottom:14px;}
+  .card-title{font-family:"Zen Maru Gothic",sans-serif;font-weight:700;font-size:15.5px;margin-bottom:2px;}
+  .card-sub{font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;}
+
+  /* category block */
+  .cat-block{margin-bottom:16px;}
+  .cat-block:last-child{margin-bottom:0;}
+  .cat-label{display:flex;align-items:baseline;gap:8px;font-family:"Zen Maru Gothic",sans-serif;
+    font-weight:700;font-size:14.5px;margin-bottom:8px;}
+  .cat-label span:first-of-type{color:var(--sprout-deep);}
+  .cat-hint{font-family:"Zen Kaku Gothic New",sans-serif;font-weight:400;font-size:11.5px;color:var(--ink-soft);}
+
+  .chip-list{list-style:none;display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;}
+  .chip-list:empty{margin-bottom:0;}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--sprout-soft);
+    border:1px solid var(--sprout-line);border-radius:999px;padding:7px 8px 7px 13px;font-size:13.5px;
+    max-width:100%;}
+  .chip span{overflow-wrap:anywhere;}
+  .chip-remove{width:22px;height:22px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;
+    justify-content:center;font-size:14px;color:var(--sprout-deep);background:rgba(255,255,255,.6);}
+  .chip-remove:hover{background:#fff;}
+
+  .add-row{display:flex;gap:8px;}
+  .add-row input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;
+    padding:11px 13px;font-size:16px;background:#fff;}
+  .add-row input:focus{outline:2px solid var(--sprout-line);outline-offset:1px;border-color:var(--sprout);}
+  .add-btn{flex-shrink:0;width:44px;height:44px;border-radius:12px;background:var(--sprout-soft);
+    border:1.5px solid var(--sprout-line);color:var(--sprout-deep);font-size:20px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;}
+  .add-btn:active{background:var(--sprout-line);}
+
+  /* freee check */
+  .check-row{display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer;font-size:14.5px;font-weight:700;
+    font-family:"Zen Maru Gothic",sans-serif;}
+  .check-row input[type="checkbox"]{width:22px;height:22px;accent-color:var(--sprout-deep);flex-shrink:0;}
+
+  /* goal */
+  .goal-card textarea{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px 13px;
+    font-size:16px;background:#fff;resize:vertical;min-height:64px;}
+  .goal-card textarea:focus{outline:2px solid var(--clay-line);outline-offset:1px;border-color:var(--clay);}
+
+  .goal-edit{margin:14px 0;}
+  .goal-edit textarea{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px 13px;
+    font-size:16px;background:#fff;resize:vertical;min-height:56px;}
+
+  /* save */
+  .save-bar{position:sticky;bottom:0;padding:10px 0 4px;background:linear-gradient(to top, var(--bg) 60%, transparent);}
+  .btn-save{width:100%;min-height:52px;border-radius:14px;background:var(--sprout-deep);color:#fff;
+    font-family:"Zen Maru Gothic",sans-serif;font-weight:700;font-size:16px;box-shadow:0 10px 26px -12px rgba(63,106,68,.6);}
+  .btn-save:active{background:var(--sprout);}
+  .btn-save.small{width:100%;min-height:44px;font-size:14px;margin-top:4px;border-radius:12px;}
+
+  .link-btn{display:block;width:100%;text-align:center;padding:12px;margin-top:6px;
+    color:var(--ink-soft);font-size:13.5px;font-weight:700;text-decoration:underline;
+    text-underline-offset:3px;min-height:44px;}
+
+  /* logs view */
+  .logs-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .back-btn{min-height:40px;padding:8px 14px;border-radius:999px;background:var(--paper);
+    border:1px solid var(--line);font-weight:700;font-size:13.5px;box-shadow:var(--shadow);}
+  .logs-title{font-family:"Zen Maru Gothic",sans-serif;font-weight:700;font-size:16px;}
+
+  .section-label{font-size:12.5px;color:var(--ink-soft);font-weight:700;margin:18px 2px 8px;}
+  .section-label:first-child{margin-top:0;}
+
+  .log-row{background:var(--paper);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);margin-bottom:10px;overflow:hidden;}
+  .log-row.expanded{border-color:var(--sprout-line);}
+  .log-row-head{display:flex;align-items:center;gap:10px;width:100%;padding:13px 16px;min-height:44px;text-align:left;}
+  .log-date{font-weight:700;font-size:14px;display:flex;align-items:center;gap:7px;flex-shrink:0;}
+  .today-tag{font-size:10.5px;font-weight:700;background:var(--sprout-soft);color:var(--sprout-deep);
+    border-radius:999px;padding:2px 8px;}
+  .log-counts{flex:1;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;font-size:12.5px;color:var(--ink-soft);}
+  .mini-count{background:var(--bg);border-radius:999px;padding:2px 8px;}
+  .mini-freee{background:var(--clay-soft);color:var(--clay-deep);border-radius:999px;padding:2px 8px;font-weight:700;}
+  .log-caret{color:var(--ink-soft);font-size:11px;flex-shrink:0;}
+  .log-row-body{padding:4px 16px 16px;border-top:1px solid var(--line);}
+  .log-row-body .cat-block{margin-top:14px;}
+
+  .toggle-all{display:block;width:100%;text-align:center;padding:12px;min-height:44px;
+    color:var(--sprout-deep);font-weight:700;font-size:13.5px;}
+
+  .empty-note{font-size:12.5px;color:var(--ink-soft);text-align:center;padding:10px;}
+
+  /* toast */
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
+    background:var(--sprout-deep);color:#fff;padding:11px 20px;border-radius:999px;font-size:13.5px;
+    font-weight:700;box-shadow:0 12px 30px -10px rgba(0,0,0,.4);opacity:0;pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease;z-index:50;white-space:nowrap;}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  @media(min-width:720px){
+    .shell{max-width:680px;padding-top:28px;}
+    .card{padding:22px 24px;}
+    .cat-block{display:grid;grid-template-columns:170px 1fr;column-gap:18px;align-items:start;}
+    .cat-label{margin-bottom:0;}
+    .cat-block .chip-list,.cat-block .add-row{grid-column:2;}
+    .cat-block .chip-list:empty + .add-row{grid-row:2;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="brand"><span class="emojis">🌱🌳🌿🌸</span> SKSS Daily</div>
+</div>
+
+<div class="shell">
+  <div id="app"></div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+
+/* ---------- date utils ---------- */
+function pad2(n){ return String(n).padStart(2,"0"); }
+function toKey(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function todayKey(){ return toKey(new Date()); }
+function keyToDate(key){ const [y,m,d] = key.split("-").map(Number); return new Date(y, m-1, d); }
+function addDays(key, n){ const d = keyToDate(key); d.setDate(d.getDate()+n); return toKey(d); }
+const WEEKDAYS_JA = ["日","月","火","水","木","金","土"];
+function formatJP(key){
+  const d = keyToDate(key);
+  return `${d.getMonth()+1}月${d.getDate()}日(${WEEKDAYS_JA[d.getDay()]})`;
+}
+function mondayOf(key){
+  const d = keyToDate(key);
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  return toKey(d);
+}
+function isInWeek(dateKey, mondayKey){
+  return dateKey >= mondayKey && dateKey <= addDays(mondayKey, 6);
+}
+
+/* ---------- storage (localStorage now; swap-friendly for IndexedDB/Supabase later) ---------- */
+const STORAGE_KEY = "skssDaily.v1.entries";
+
+function createEmptyEntry(dateKey){
+  return {
+    date: dateKey,
+    seed: [], root: [], branch: [], bloom: [],
+    freee: { checked: false, checkedAt: null, source: "manual" }, // source: future 'freee-api' etc.
+    todayGoal: "",
+    updatedAt: null,
+  };
+}
+
+const Store = {
+  _readAll(){
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      console.error("SKSS Daily: failed to read storage", e);
+      return {};
+    }
+  },
+  _writeAll(all){
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+    } catch (e) {
+      console.error("SKSS Daily: failed to write storage", e);
+    }
+  },
+  get(dateKey){
+    const all = this._readAll();
+    return all[dateKey] || createEmptyEntry(dateKey);
+  },
+  save(entry){
+    const all = this._readAll();
+    entry.updatedAt = new Date().toISOString();
+    all[entry.date] = entry;
+    this._writeAll(all);
+    return entry;
+  },
+  list(){
+    return Object.values(this._readAll()).sort((a, b) => b.date.localeCompare(a.date));
+  },
+};
+
+function weeklyBloomCount(refKey){
+  const monday = mondayOf(refKey || todayKey());
+  let count = 0;
+  for (const e of Store.list()) {
+    if (isInWeek(e.date, monday)) count += (e.bloom ? e.bloom.length : 0);
+  }
+  return count;
+}
+
+/* ---------- categories ---------- */
+const CATEGORIES = [
+  { key: "seed",   emoji: "🌱", label: "種", hint: "思いついたこと・アイデア" },
+  { key: "root",   emoji: "🌳", label: "根", hint: "方向性が固まった・調べた・整理した" },
+  { key: "branch", emoji: "🌿", label: "枝", hint: "制作や作業が進んだこと" },
+  { key: "bloom",  emoji: "🌸", label: "咲", hint: "公開・完成・納品など、外に出たもの" },
+];
+
+/* ---------- in-memory entry cache ---------- */
+const entriesCache = {};
+function getEntry(date){
+  if (!entriesCache[date]) entriesCache[date] = Store.get(date);
+  return entriesCache[date];
+}
+function persistEntry(date){
+  Store.save(getEntry(date));
+}
+
+/* ---------- app state ---------- */
+const state = {
+  view: "today",       // 'today' | 'logs'
+  expandedDate: null,
+  showAllLogs: false,
+  focusAfterRender: null,
+};
+
+/* ---------- escaping ---------- */
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+/* ---------- rendering ---------- */
+function render(){
+  const app = document.getElementById("app");
+  app.innerHTML = state.view === "today" ? renderTodayView() : renderLogsView();
+  if (state.focusAfterRender) {
+    const el = document.getElementById(state.focusAfterRender);
+    if (el) el.focus();
+    state.focusAfterRender = null;
+  }
+}
+
+function renderCategoryBlock(scope, entry, cat){
+  const items = entry[cat.key] || [];
+  const inputId = `add-${scope}-${cat.key}-${entry.date}`;
+  return `
+    <div class="cat-block">
+      <div class="cat-label">
+        <span>${cat.emoji} ${cat.label}</span>
+        <span class="cat-hint">${esc(cat.hint)}</span>
+      </div>
+      <div>
+        <ul class="chip-list">
+          ${items.map((item, i) => `
+            <li class="chip">
+              <span>${esc(item)}</span>
+              <button type="button" class="chip-remove" data-action="remove-item"
+                data-date="${entry.date}" data-cat="${cat.key}" data-index="${i}" aria-label="削除">×</button>
+            </li>`).join("")}
+        </ul>
+        <div class="add-row">
+          <input type="text" id="${inputId}" placeholder="追加する…" autocomplete="off"
+            data-action="add-input" data-scope="${scope}" data-date="${entry.date}" data-cat="${cat.key}">
+          <button type="button" class="add-btn" data-action="add-item"
+            data-scope="${scope}" data-date="${entry.date}" data-cat="${cat.key}" data-input="${inputId}" aria-label="追加">＋</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderTodayView(){
+  const entry = getEntry(todayKey());
+  const weekCount = weeklyBloomCount();
+  return `
+    <section class="top-summary">
+      <div class="date-badge">${esc(formatJP(entry.date))}</div>
+      <div class="week-badge">🌸 今週 ${weekCount}件</div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">前日の記録</h2>
+      <p class="card-sub">思いついたこと・進んだこと・成果を、それぞれ短く追加します</p>
+      ${CATEGORIES.map((cat) => renderCategoryBlock("today", entry, cat)).join("")}
+    </section>
+
+    <section class="card">
+      <label class="check-row" for="freee-check-${entry.date}">
+        <input type="checkbox" id="freee-check-${entry.date}" data-action="toggle-freee"
+          data-date="${entry.date}" ${entry.freee.checked ? "checked" : ""}>
+        <span>💰 freee確認済み</span>
+      </label>
+    </section>
+
+    <section class="card goal-card">
+      <h2 class="card-title">🌸 今日の咲候補</h2>
+      <p class="card-sub">今日これが終わればOK、という成果をひとつ</p>
+      <textarea rows="2" placeholder="例）〇〇のデザイン案を1本提出する"
+        data-action="edit-goal" data-date="${entry.date}">${esc(entry.todayGoal)}</textarea>
+    </section>
+
+    <div class="save-bar">
+      <button type="button" class="btn-save" data-action="save">✓ 保存する</button>
+    </div>
+
+    <button type="button" class="link-btn" data-action="open-logs">📖 過去ログを見る</button>
+  `;
+}
+
+function renderLogRow(date){
+  const entry = getEntry(date);
+  const expanded = state.expandedDate === date;
+  const counts = CATEGORIES.map((c) => `<span class="mini-count">${c.emoji}${entry[c.key].length}</span>`).join("");
+  const freeeBadge = entry.freee.checked ? `<span class="mini-freee">💰済</span>` : "";
+  const isToday = date === todayKey();
+
+  return `
+    <div class="log-row ${expanded ? "expanded" : ""}">
+      <button type="button" class="log-row-head" data-action="toggle-log" data-date="${date}">
+        <span class="log-date">${esc(formatJP(date))}${isToday ? '<span class="today-tag">今日</span>' : ""}</span>
+        <span class="log-counts">${counts}${freeeBadge}</span>
+        <span class="log-caret">${expanded ? "▲" : "▼"}</span>
+      </button>
+      ${expanded ? `
+        <div class="log-row-body">
+          ${CATEGORIES.map((cat) => renderCategoryBlock(`log-${date}`, entry, cat)).join("")}
+          <label class="check-row" for="freee-check-log-${date}">
+            <input type="checkbox" id="freee-check-log-${date}" data-action="toggle-freee"
+              data-date="${date}" ${entry.freee.checked ? "checked" : ""}>
+            <span>💰 freee確認済み</span>
+          </label>
+          <div class="goal-edit">
+            <div class="cat-label"><span>🌸 今日の咲候補</span></div>
+            <textarea rows="2" data-action="edit-goal" data-date="${date}">${esc(entry.todayGoal)}</textarea>
+          </div>
+          <button type="button" class="btn-save small" data-action="save-log" data-date="${date}">✓ 保存して閉じる</button>
+        </div>
+      ` : ""}
+    </div>`;
+}
+
+function renderLogsView(){
+  const weekCount = weeklyBloomCount();
+  const recentKeys = Array.from({ length: 7 }, (_, i) => addDays(todayKey(), -i));
+  const oldestRecent = recentKeys[recentKeys.length - 1];
+  const older = Store.list().filter((e) => e.date < oldestRecent);
+
+  return `
+    <div class="logs-header">
+      <button type="button" class="back-btn" data-action="back-today">← 今日</button>
+      <span class="logs-title">📖 過去ログ</span>
+    </div>
+
+    <section class="top-summary">
+      <div class="date-badge">今週の記録</div>
+      <div class="week-badge">🌸 今週 ${weekCount}件</div>
+    </section>
+
+    <div class="section-label">直近7日間</div>
+    ${recentKeys.map((d) => renderLogRow(d)).join("")}
+
+    ${older.length ? `
+      <button type="button" class="toggle-all" data-action="toggle-all-logs">
+        ${state.showAllLogs ? "それ以前の記録を閉じる ▲" : `それ以前の記録を見る（${older.length}件） ▼`}
+      </button>
+      ${state.showAllLogs ? `
+        <div class="section-label">それ以前</div>
+        ${older.map((e) => renderLogRow(e.date)).join("")}
+      ` : ""}
+    ` : `<p class="empty-note">それより前の記録はまだありません</p>`}
+  `;
+}
+
+/* ---------- mutations ---------- */
+function handleAddItem(scope, date, cat, inputId){
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val) { input.focus(); return; }
+  const entry = getEntry(date);
+  entry[cat].push(val);
+  persistEntry(date);
+  state.focusAfterRender = inputId;
+  render();
+}
+
+function handleRemoveItem(date, cat, index){
+  const entry = getEntry(date);
+  entry[cat].splice(index, 1);
+  persistEntry(date);
+  render();
+}
+
+function handleToggleFreee(date, checked){
+  const entry = getEntry(date);
+  entry.freee.checked = checked;
+  entry.freee.checkedAt = checked ? new Date().toISOString() : null;
+  persistEntry(date);
+  render();
+}
+
+function handleEditGoal(date, value){
+  const entry = getEntry(date);
+  entry.todayGoal = value;
+  persistEntry(date);
+}
+
+function showToast(msg){
+  const toast = document.getElementById("toast");
+  toast.textContent = msg;
+  toast.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toast.classList.remove("show"), 1800);
+}
+
+/* ---------- event delegation ---------- */
+const app = document.getElementById("app");
+
+app.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-action]");
+  if (!el) return;
+  const action = el.dataset.action;
+
+  if (action === "add-item") {
+    handleAddItem(el.dataset.scope, el.dataset.date, el.dataset.cat, el.dataset.input);
+  } else if (action === "remove-item") {
+    handleRemoveItem(el.dataset.date, el.dataset.cat, Number(el.dataset.index));
+  } else if (action === "save") {
+    persistEntry(todayKey());
+    showToast("✓ 保存しました");
+  } else if (action === "save-log") {
+    persistEntry(el.dataset.date);
+    state.expandedDate = null;
+    showToast("✓ 保存しました");
+    render();
+  } else if (action === "open-logs") {
+    state.view = "logs";
+    state.expandedDate = null;
+    render();
+  } else if (action === "back-today") {
+    state.view = "today";
+    render();
+  } else if (action === "toggle-log") {
+    const date = el.dataset.date;
+    state.expandedDate = state.expandedDate === date ? null : date;
+    render();
+  } else if (action === "toggle-all-logs") {
+    state.showAllLogs = !state.showAllLogs;
+    render();
+  }
+});
+
+app.addEventListener("change", (e) => {
+  const el = e.target.closest('[data-action="toggle-freee"]');
+  if (!el) return;
+  handleToggleFreee(el.dataset.date, el.checked);
+});
+
+app.addEventListener("input", (e) => {
+  const el = e.target.closest('[data-action="edit-goal"]');
+  if (!el) return;
+  handleEditGoal(el.dataset.date, el.value);
+});
+
+app.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const el = e.target.closest('[data-action="add-input"]');
+  if (!el) return;
+  e.preventDefault();
+  handleAddItem(el.dataset.scope, el.dataset.date, el.dataset.cat, el.id);
+});
+
+/* ---------- init ---------- */
+render();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((e) => console.error("SW registration failed", e));
+  });
+}
+</script>
+</body>
+</html>
