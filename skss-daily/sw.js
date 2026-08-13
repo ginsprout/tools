@@ -1,4 +1,4 @@
-const CACHE_NAME = "skss-daily-v3";
+const CACHE_NAME = "skss-daily-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
