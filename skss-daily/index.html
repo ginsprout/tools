@@ -88,7 +88,7 @@
     display:flex;align-items:center;justify-content:center;}
   .add-btn:active{background:var(--sprout-line);}
 
-  /* confirmation checks (freee / mindmap / …) */
+  /* confirmation checks (MF / mindmap / …) */
   .check-row{display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer;font-size:14.5px;font-weight:700;
     font-family:"Zen Maru Gothic",sans-serif;}
   .check-row input[type="checkbox"]{width:22px;height:22px;accent-color:var(--sprout-deep);flex-shrink:0;}
@@ -213,7 +213,7 @@ function isInWeek(dateKey, mondayKey){
 const STORAGE_KEY = "skssDaily.v1.entries";
 
 const CHECKS = [
-  { key: "freee",   emoji: "💰", label: "freee確認済み",         badge: "💰済" }, // source: future 'freee-api' etc.
+  { key: "mf",      emoji: "💰", label: "MF確認済み",             badge: "💰済" }, // source: future 'moneyforward-api' etc.
   { key: "mindmap", emoji: "🧠", label: "マインドマップ確認済み", badge: "🧠済" },
 ];
 
@@ -232,6 +232,9 @@ function createEmptyEntry(dateKey){
 function normalizeEntry(raw, dateKey){
   const entry = { ...createEmptyEntry(dateKey), ...raw };
   for (const c of CHECKS) entry[c.key] = { ...createEmptyEntry(dateKey)[c.key], ...(raw[c.key] || {}) };
+  // migrate the old "freee" check (freee -> MoneyForward) so already-checked days aren't lost
+  if (!raw.mf && raw.freee) entry.mf = { ...createEmptyEntry(dateKey).mf, ...raw.freee };
+  delete entry.freee;
   return entry;
 }
 
