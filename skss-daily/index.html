@@ -75,6 +75,8 @@
     border:1px solid var(--sprout-line);border-radius:999px;padding:7px 8px 7px 13px;font-size:13.5px;
     max-width:100%;}
   .chip span{overflow-wrap:anywhere;}
+  .chip-thumb{width:24px;height:24px;border-radius:7px;object-fit:cover;flex-shrink:0;cursor:zoom-in;
+    margin-left:-6px;}
   .chip-remove{width:22px;height:22px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;
     justify-content:center;font-size:14px;color:var(--sprout-deep);background:rgba(255,255,255,.6);}
   .chip-remove:hover{background:#fff;}
@@ -83,10 +85,27 @@
   .add-row input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;
     padding:11px 13px;font-size:16px;background:#fff;}
   .add-row input:focus{outline:2px solid var(--sprout-line);outline-offset:1px;border-color:var(--sprout);}
-  .add-btn{flex-shrink:0;width:44px;height:44px;border-radius:12px;background:var(--sprout-soft);
-    border:1.5px solid var(--sprout-line);color:var(--sprout-deep);font-size:20px;font-weight:700;
+  .add-btn,.img-btn{flex-shrink:0;width:44px;height:44px;border-radius:12px;font-size:18px;
     display:flex;align-items:center;justify-content:center;}
+  .add-btn{background:var(--sprout-soft);border:1.5px solid var(--sprout-line);color:var(--sprout-deep);
+    font-size:20px;font-weight:700;}
   .add-btn:active{background:var(--sprout-line);}
+  .img-btn{background:#fff;border:1.5px solid var(--line);color:var(--ink-soft);}
+  .img-btn.has-image{background:var(--clay-soft);border-color:var(--clay-line);color:var(--clay-deep);}
+  .img-btn:active{background:var(--sprout-soft);}
+
+  .pending-preview{display:flex;align-items:center;gap:8px;margin-top:8px;}
+  .pending-preview:empty{display:none;margin-top:0;}
+  .pending-thumb{width:40px;height:40px;border-radius:10px;object-fit:cover;}
+  .pending-remove{width:24px;height:24px;flex-shrink:0;border-radius:50%;background:#fff;
+    border:1px solid var(--line);color:var(--ink-soft);font-size:13px;display:flex;
+    align-items:center;justify-content:center;}
+
+  .lightbox{position:fixed;inset:0;background:rgba(20,26,20,.85);display:flex;align-items:center;
+    justify-content:center;padding:24px;z-index:60;opacity:0;pointer-events:none;transition:opacity .2s ease;}
+  .lightbox.show{opacity:1;pointer-events:auto;}
+  .lightbox img{max-width:100%;max-height:100%;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.5);
+    cursor:zoom-out;}
 
   /* confirmation checks (MF / mindmap / …) */
   .check-row{display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer;font-size:14.5px;font-weight:700;
@@ -184,6 +203,8 @@
 
 <div id="toast" role="status" aria-live="polite"></div>
 
+<div id="lightbox" class="lightbox"><img id="lightbox-img" src="" alt="添付画像の拡大表示"></div>
+
 <script>
 "use strict";
 
@@ -212,6 +233,14 @@ function isInWeek(dateKey, mondayKey){
 /* ---------- storage (localStorage now; swap-friendly for IndexedDB/Supabase later) ---------- */
 const STORAGE_KEY = "skssDaily.v1.entries";
 
+/* ---------- categories ---------- */
+const CATEGORIES = [
+  { key: "seed",   emoji: "🌱", label: "種", hint: "思いついたこと・アイデア" },
+  { key: "root",   emoji: "🌳", label: "根", hint: "方向性が固まった・調べた・整理した" },
+  { key: "branch", emoji: "🌿", label: "枝", hint: "制作や作業が進んだこと" },
+  { key: "bloom",  emoji: "🌸", label: "咲", hint: "公開・完成・納品など、外に出たもの" },
+];
+
 const CHECKS = [
   { key: "mf",      emoji: "💰", label: "MF確認済み",             badge: "💰済" }, // source: future 'moneyforward-api' etc.
   { key: "mindmap", emoji: "🧠", label: "マインドマップ確認済み", badge: "🧠済" },
@@ -228,9 +257,16 @@ function createEmptyEntry(dateKey){
   return entry;
 }
 
-// fills in any check fields missing from entries saved before a new check was added
+// a category item is { text, image }; image is a compressed data URL or null
+function normalizeItem(item){
+  return typeof item === "string" ? { text: item, image: null } : { text: item.text || "", image: item.image || null };
+}
+
+// fills in any check/category fields missing or in an older shape from before image
+// attachments and the MF check existed, so old saved entries keep working unchanged
 function normalizeEntry(raw, dateKey){
   const entry = { ...createEmptyEntry(dateKey), ...raw };
+  for (const c of CATEGORIES) entry[c.key] = (raw[c.key] || []).map(normalizeItem);
   for (const c of CHECKS) entry[c.key] = { ...createEmptyEntry(dateKey)[c.key], ...(raw[c.key] || {}) };
   // migrate the old "freee" check (freee -> MoneyForward) so already-checked days aren't lost
   if (!raw.mf && raw.freee) entry.mf = { ...createEmptyEntry(dateKey).mf, ...raw.freee };
@@ -253,6 +289,9 @@ const Store = {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
     } catch (e) {
       console.error("SKSS Daily: failed to write storage", e);
+      if (typeof showToast === "function") {
+        showToast(e && e.name === "QuotaExceededError" ? "⚠ 容量が上限です。画像を減らしてください" : "⚠ 保存に失敗しました");
+      }
     }
   },
   get(dateKey){
@@ -280,14 +319,6 @@ function weeklyBloomCount(refKey){
   return count;
 }
 
-/* ---------- categories ---------- */
-const CATEGORIES = [
-  { key: "seed",   emoji: "🌱", label: "種", hint: "思いついたこと・アイデア" },
-  { key: "root",   emoji: "🌳", label: "根", hint: "方向性が固まった・調べた・整理した" },
-  { key: "branch", emoji: "🌿", label: "枝", hint: "制作や作業が進んだこと" },
-  { key: "bloom",  emoji: "🌸", label: "咲", hint: "公開・完成・納品など、外に出たもの" },
-];
-
 /* ---------- in-memory entry cache ---------- */
 const entriesCache = {};
 function getEntry(date){
@@ -296,6 +327,37 @@ function getEntry(date){
 }
 function persistEntry(date){
   Store.save(getEntry(date));
+}
+
+// image chosen but not yet attached to an item, keyed by the add-row's text input id
+const pendingImages = new Map();
+
+// downscales + re-encodes as JPEG so a multi-MB camera photo doesn't blow the
+// localStorage quota — everything here stays a small (tens of KB) data URL
+function readAndCompressImage(file, maxDim = 800, quality = 0.6){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error("read failed"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode failed"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 /* ---------- app state ---------- */
@@ -321,6 +383,7 @@ function render(){
 function renderCategoryBlock(scope, entry, cat){
   const items = entry[cat.key] || [];
   const inputId = `add-${scope}-${cat.key}-${entry.date}`;
+  const fileId = `${inputId}-file`;
   return `
     <div class="cat-block">
       <div class="cat-label">
@@ -331,7 +394,8 @@ function renderCategoryBlock(scope, entry, cat){
         <ul class="chip-list">
           ${items.map((item, i) => `
             <li class="chip">
-              <span>${esc(item)}</span>
+              ${item.image ? `<img class="chip-thumb" src="${item.image}" data-action="view-image" alt="添付画像">` : ""}
+              <span>${esc(item.text)}</span>
               <button type="button" class="chip-remove" data-action="remove-item"
                 data-date="${entry.date}" data-cat="${cat.key}" data-index="${i}" aria-label="削除">×</button>
             </li>`).join("")}
@@ -339,9 +403,12 @@ function renderCategoryBlock(scope, entry, cat){
         <div class="add-row">
           <input type="text" id="${inputId}" placeholder="追加する…" autocomplete="off"
             data-action="add-input" data-scope="${scope}" data-date="${entry.date}" data-cat="${cat.key}">
+          <input type="file" accept="image/*" id="${fileId}" data-action="pick-image" data-for="${inputId}" hidden>
+          <button type="button" class="img-btn" data-action="trigger-image" data-target="${fileId}" aria-label="画像を選ぶ">📷</button>
           <button type="button" class="add-btn" data-action="add-item"
             data-scope="${scope}" data-date="${entry.date}" data-cat="${cat.key}" data-input="${inputId}" aria-label="追加">＋</button>
         </div>
+        <div class="pending-preview" id="pending-${inputId}"></div>
       </div>
     </div>`;
 }
@@ -485,23 +552,35 @@ function renderMonthGroup(monthKey, entries){
 function handleAddItem(scope, date, cat, inputId){
   const input = document.getElementById(inputId);
   if (!input) return;
-  const val = input.value.trim();
-  if (!val) { input.focus(); return; }
+  const text = input.value.trim();
+  const image = pendingImages.get(inputId) || null;
+  if (!text && !image) { input.focus(); return; }
   const entry = getEntry(date);
   const index = entry[cat].length;
-  entry[cat].push(val);
+  const item = { text, image };
+  entry[cat].push(item);
   persistEntry(date);
   input.value = "";
-  patchAfterAdd(input, date, cat, index, val);
+  pendingImages.delete(inputId);
+  renderPendingPreview(inputId);
+  patchAfterAdd(input, date, cat, index, item);
 }
 
-function patchAfterAdd(input, date, cat, index, val){
+function patchAfterAdd(input, date, cat, index, item){
   const list = input.closest(".cat-block")?.querySelector(".chip-list");
   if (list) {
     const li = document.createElement("li");
     li.className = "chip";
+    if (item.image) {
+      const img = document.createElement("img");
+      img.className = "chip-thumb";
+      img.src = item.image;
+      img.alt = "添付画像";
+      img.dataset.action = "view-image";
+      li.appendChild(img);
+    }
     const span = document.createElement("span");
-    span.textContent = val;
+    span.textContent = item.text;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "chip-remove";
@@ -526,6 +605,53 @@ function patchAfterAdd(input, date, cat, index, val){
     const current = parseInt(miniCount.textContent.replace(/\D/g, ""), 10) || 0;
     miniCount.textContent = `${emoji}${current + 1}`;
   }
+}
+
+async function handlePickImage(fileEl){
+  const file = fileEl.files && fileEl.files[0];
+  if (!file) return;
+  const inputId = fileEl.dataset.for;
+  try {
+    pendingImages.set(inputId, await readAndCompressImage(file));
+    renderPendingPreview(inputId);
+  } catch (err) {
+    console.error("SKSS Daily: image processing failed", err);
+    showToast("⚠ 画像を読み込めませんでした");
+  } finally {
+    fileEl.value = ""; // allow re-selecting the same file later
+  }
+}
+
+function renderPendingPreview(inputId){
+  const container = document.getElementById(`pending-${inputId}`);
+  const fileInput = document.getElementById(`${inputId}-file`);
+  const camBtn = fileInput && fileInput.nextElementSibling;
+  const dataUrl = pendingImages.get(inputId);
+  if (camBtn) camBtn.classList.toggle("has-image", !!dataUrl);
+  if (!container) return;
+  container.innerHTML = "";
+  if (!dataUrl) return;
+  const img = document.createElement("img");
+  img.className = "pending-thumb";
+  img.src = dataUrl;
+  img.alt = "添付予定の画像";
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "pending-remove";
+  removeBtn.textContent = "×";
+  removeBtn.setAttribute("aria-label", "画像を外す");
+  removeBtn.dataset.action = "clear-pending-image";
+  removeBtn.dataset.input = inputId;
+  container.append(img, removeBtn);
+}
+
+function openLightbox(src){
+  document.getElementById("lightbox-img").src = src;
+  document.getElementById("lightbox").classList.add("show");
+}
+function closeLightbox(){
+  document.getElementById("lightbox").classList.remove("show");
+  document.getElementById("lightbox-img").src = "";
 }
 
 function handleRemoveItem(date, cat, index){
@@ -576,7 +702,7 @@ function buildPrintableHtml(){
     const catsHtml = CATEGORIES.map((c) => {
       const items = e[c.key] || [];
       const body = items.length
-        ? `<ul>${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`
+        ? `<ul>${items.map((i) => `<li>${esc(i.text)}${i.image ? ` <img class="pv-thumb" src="${i.image}" alt="">` : ""}</li>`).join("")}</ul>`
         : `<p class="empty">(なし)</p>`;
       return `<div class="cat"><h3>${c.emoji} ${esc(c.label)}</h3>${body}</div>`;
     }).join("");
@@ -606,6 +732,7 @@ function buildPrintableHtml(){
   .cat .empty{margin:0 0 0 2px;font-size:12.5px;color:#999;}
   .checks{font-size:12.5px;color:#555;margin:10px 0 4px;}
   .goal{font-size:13px;}
+  .pv-thumb{width:22px;height:22px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-left:4px;}
   @media print{ body{padding:0;} }
 </style></head>
 <body>
@@ -675,13 +802,24 @@ app.addEventListener("click", (e) => {
     handleExportBackup();
   } else if (action === "export-print") {
     handlePrintExport();
+  } else if (action === "trigger-image") {
+    document.getElementById(el.dataset.target)?.click();
+  } else if (action === "clear-pending-image") {
+    pendingImages.delete(el.dataset.input);
+    renderPendingPreview(el.dataset.input);
+  } else if (action === "view-image") {
+    openLightbox(el.src);
   }
 });
 
+document.getElementById("lightbox").addEventListener("click", closeLightbox);
+
 app.addEventListener("change", (e) => {
-  const el = e.target.closest('[data-action="toggle-check"]');
-  if (!el) return;
-  handleToggleCheck(el.dataset.date, el.dataset.field, el.checked);
+  const checkEl = e.target.closest('[data-action="toggle-check"]');
+  if (checkEl) { handleToggleCheck(checkEl.dataset.date, checkEl.dataset.field, checkEl.checked); return; }
+
+  const fileEl = e.target.closest('[data-action="pick-image"]');
+  if (fileEl) handlePickImage(fileEl);
 });
 
 app.addEventListener("input", (e) => {
