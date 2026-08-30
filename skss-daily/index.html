@@ -306,7 +306,9 @@ const Store = {
     return entry;
   },
   list(){
-    return Object.values(this._readAll()).sort((a, b) => b.date.localeCompare(a.date));
+    return Object.values(this._readAll())
+      .map((raw) => normalizeEntry(raw, raw.date))
+      .sort((a, b) => b.date.localeCompare(a.date));
   },
 };
 
@@ -748,8 +750,17 @@ function handlePrintExport(){
     showToast("ポップアップがブロックされました");
     return;
   }
+  let html;
+  try {
+    html = buildPrintableHtml();
+  } catch (e) {
+    console.error("SKSS Daily: failed to build printable page", e);
+    win.close();
+    showToast("⚠ 印刷用ページの作成に失敗しました");
+    return;
+  }
   win.document.open();
-  win.document.write(buildPrintableHtml());
+  win.document.write(html);
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 300);
