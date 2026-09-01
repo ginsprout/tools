@@ -66,8 +66,11 @@
   .cat-block:last-child{margin-bottom:0;}
   .cat-label{display:flex;align-items:baseline;gap:8px;font-family:"Zen Maru Gothic",sans-serif;
     font-weight:700;font-size:14.5px;margin-bottom:8px;}
-  .cat-label span:first-of-type{color:var(--sprout-deep);}
+  .cat-label span:first-of-type{color:var(--sprout-deep);white-space:nowrap;flex-shrink:0;}
   .cat-hint{font-family:"Zen Kaku Gothic New",sans-serif;font-weight:400;font-size:11.5px;color:var(--ink-soft);}
+  /* "memo" sits outside the 種根枝咲 growth metaphor, so it's set off from the rest */
+  .cat-block[data-cat="memo"]{margin-top:18px;padding-top:16px;border-top:1px dashed var(--line);}
+  .cat-block[data-cat="memo"] .cat-label span:first-of-type{color:var(--clay-deep);}
 
   .chip-list{list-style:none;display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;}
   .chip-list:empty{margin-bottom:0;}
@@ -239,6 +242,7 @@ const CATEGORIES = [
   { key: "root",   emoji: "🌳", label: "根", hint: "方向性が固まった・調べた・整理した" },
   { key: "branch", emoji: "🌿", label: "枝", hint: "制作や作業が進んだこと" },
   { key: "bloom",  emoji: "🌸", label: "咲", hint: "公開・完成・納品など、外に出たもの" },
+  { key: "memo",   emoji: "📝", label: "メモ", hint: "種根枝咲に入らない、ふと考えたこと・やったこと" },
 ];
 
 const CHECKS = [
@@ -249,10 +253,10 @@ const CHECKS = [
 function createEmptyEntry(dateKey){
   const entry = {
     date: dateKey,
-    seed: [], root: [], branch: [], bloom: [],
     todayGoal: "",
     updatedAt: null,
   };
+  for (const c of CATEGORIES) entry[c.key] = [];
   for (const c of CHECKS) entry[c.key] = { checked: false, checkedAt: null, source: "manual" };
   return entry;
 }
@@ -387,7 +391,7 @@ function renderCategoryBlock(scope, entry, cat){
   const inputId = `add-${scope}-${cat.key}-${entry.date}`;
   const fileId = `${inputId}-file`;
   return `
-    <div class="cat-block">
+    <div class="cat-block" data-cat="${cat.key}">
       <div class="cat-label">
         <span>${cat.emoji} ${cat.label}</span>
         <span class="cat-hint">${esc(cat.hint)}</span>
