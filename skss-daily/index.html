@@ -68,9 +68,6 @@
     font-weight:700;font-size:14.5px;margin-bottom:8px;}
   .cat-label span:first-of-type{color:var(--sprout-deep);white-space:nowrap;flex-shrink:0;}
   .cat-hint{font-family:"Zen Kaku Gothic New",sans-serif;font-weight:400;font-size:11.5px;color:var(--ink-soft);}
-  /* "memo" sits outside the 種根枝咲 growth metaphor, so it's set off from the rest */
-  .cat-block[data-cat="memo"]{margin-top:18px;padding-top:16px;border-top:1px dashed var(--line);}
-  .cat-block[data-cat="memo"] .cat-label span:first-of-type{color:var(--clay-deep);}
 
   .chip-list{list-style:none;display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;}
   .chip-list:empty{margin-bottom:0;}
@@ -242,7 +239,6 @@ const CATEGORIES = [
   { key: "root",   emoji: "🌳", label: "根", hint: "方向性が固まった・調べた・整理した" },
   { key: "branch", emoji: "🌿", label: "枝", hint: "制作や作業が進んだこと" },
   { key: "bloom",  emoji: "🌸", label: "咲", hint: "公開・完成・納品など、外に出たもの" },
-  { key: "memo",   emoji: "📝", label: "メモ", hint: "種根枝咲に入らない、ふと考えたこと・やったこと" },
 ];
 
 const CHECKS = [
@@ -254,6 +250,7 @@ function createEmptyEntry(dateKey){
   const entry = {
     date: dateKey,
     todayGoal: "",
+    memo: "",
     updatedAt: null,
   };
   for (const c of CATEGORIES) entry[c.key] = [];
@@ -272,6 +269,11 @@ function normalizeEntry(raw, dateKey){
   const entry = { ...createEmptyEntry(dateKey), ...raw };
   for (const c of CATEGORIES) entry[c.key] = (raw[c.key] || []).map(normalizeItem);
   for (const c of CHECKS) entry[c.key] = { ...createEmptyEntry(dateKey)[c.key], ...(raw[c.key] || {}) };
+  // "memo" briefly shipped as a chip-list category before becoming a free-text field —
+  // fold any already-added items into the text so nothing typed in that window is lost
+  if (Array.isArray(raw.memo)) {
+    entry.memo = raw.memo.map(normalizeItem).map((i) => i.text).filter(Boolean).join("\n");
+  }
   // migrate the old "freee" check (freee -> MoneyForward) so already-checked days aren't lost
   if (!raw.mf && raw.freee) entry.mf = { ...createEmptyEntry(dateKey).mf, ...raw.freee };
   delete entry.freee;
@@ -455,6 +457,13 @@ function renderTodayView(){
         data-action="edit-goal" data-date="${entry.date}">${esc(entry.todayGoal)}</textarea>
     </section>
 
+    <section class="card goal-card">
+      <h2 class="card-title">📝 メモ</h2>
+      <p class="card-sub">種根枝咲に入らない、ふと考えたこと・やったこと</p>
+      <textarea rows="2" placeholder="例）電車の広告のコピーが気になった"
+        data-action="edit-memo" data-date="${entry.date}">${esc(entry.memo)}</textarea>
+    </section>
+
     <div class="save-bar">
       <button type="button" class="btn-save" data-action="save">✓ 保存する</button>
     </div>
@@ -484,6 +493,10 @@ function renderLogRow(date){
           <div class="goal-edit">
             <div class="cat-label"><span>🌸 今日の咲候補</span></div>
             <textarea rows="2" data-action="edit-goal" data-date="${date}">${esc(entry.todayGoal)}</textarea>
+          </div>
+          <div class="goal-edit">
+            <div class="cat-label"><span>📝 メモ</span></div>
+            <textarea rows="2" data-action="edit-memo" data-date="${date}">${esc(entry.memo)}</textarea>
           </div>
           <button type="button" class="btn-save small" data-action="save-log" data-date="${date}">✓ 保存して閉じる</button>
         </div>
@@ -681,6 +694,12 @@ function handleEditGoal(date, value){
   persistEntry(date);
 }
 
+function handleEditMemo(date, value){
+  const entry = getEntry(date);
+  entry.memo = value;
+  persistEntry(date);
+}
+
 function handleExportBackup(){
   const data = {
     app: "skss-daily",
@@ -719,6 +738,7 @@ function buildPrintableHtml(){
         ${catsHtml}
         <p class="checks">${checksHtml}</p>
         <p class="goal"><strong>🌸 今日の咲候補：</strong>${e.todayGoal ? esc(e.todayGoal) : "(未設定)"}</p>
+        ${e.memo ? `<p class="goal"><strong>📝 メモ：</strong>${esc(e.memo)}</p>` : ""}
       </section>`;
   }).join("");
 
@@ -838,9 +858,11 @@ app.addEventListener("change", (e) => {
 });
 
 app.addEventListener("input", (e) => {
-  const el = e.target.closest('[data-action="edit-goal"]');
-  if (!el) return;
-  handleEditGoal(el.dataset.date, el.value);
+  const goalEl = e.target.closest('[data-action="edit-goal"]');
+  if (goalEl) { handleEditGoal(goalEl.dataset.date, goalEl.value); return; }
+
+  const memoEl = e.target.closest('[data-action="edit-memo"]');
+  if (memoEl) handleEditMemo(memoEl.dataset.date, memoEl.value);
 });
 
 // IME (日本語入力) の変換確定Enterで誤って追加されないよう、変換中は無視する
