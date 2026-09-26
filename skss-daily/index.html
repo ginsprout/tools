@@ -173,6 +173,8 @@
   .backup-btn:active{background:var(--sprout-soft);}
 
   .empty-note{font-size:12.5px;color:var(--ink-soft);text-align:center;padding:10px;}
+  .memory-list{padding-left:22px;font-size:13.5px;}
+  .memory-list li{margin:3px 0;}
 
   /* toast */
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
@@ -293,11 +295,13 @@ const Store = {
   _writeAll(all){
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+      return true;
     } catch (e) {
       console.error("SKSS Daily: failed to write storage", e);
       if (typeof showToast === "function") {
         showToast(e && e.name === "QuotaExceededError" ? "⚠ 容量が上限です。画像を減らしてください" : "⚠ 保存に失敗しました");
       }
+      return false;
     }
   },
   get(dateKey){
@@ -434,11 +438,19 @@ function renderCheckRow(scope, entry, check){
 function renderTodayView(){
   const entry = getEntry(todayKey());
   const weekCount = weeklyBloomCount();
+  const lastYearKey = `${Number(entry.date.slice(0,4))-1}${entry.date.slice(4)}`;
+  const lastYear = Store._readAll()[lastYearKey];
   return `
     <section class="top-summary">
       <div class="date-badge">${esc(formatJP(entry.date))}</div>
       <div class="week-badge">🌸 今週 ${weekCount}件</div>
     </section>
+
+    ${lastYear ? `<section class="card"><h2 class="card-title">🕰 1年前の今日</h2>
+      <p class="card-sub">${esc(lastYearKey)}</p>
+      <ul class="memory-list">${CATEGORIES.flatMap(c => (lastYear[c.key] || []).map(i => `<li>${c.emoji} ${esc(normalizeItem(i).text)}</li>`)).join("")}</ul>
+      ${lastYear.memo ? `<p>${esc(Array.isArray(lastYear.memo) ? lastYear.memo.map(i => normalizeItem(i).text).join("、") : lastYear.memo)}</p>` : ""}
+    </section>` : ""}
 
     <section class="card">
       <h2 class="card-title">前日の記録</h2>
@@ -469,6 +481,7 @@ function renderTodayView(){
     </div>
 
     <button type="button" class="link-btn" data-action="open-logs">📖 過去ログを見る</button>
+    <button type="button" class="link-btn" data-action="copy-chat">🐥 最近の日報をチャトピー用にコピー</button>
   `;
 }
 
@@ -533,6 +546,12 @@ function renderLogsView(){
       <button type="button" class="backup-btn" data-action="export-backup">⬇ JSONで保存</button>
       <button type="button" class="backup-btn" data-action="export-print">🖨 印刷／PDFで見る</button>
     </div>
+    <div class="backup-row">
+      <button type="button" class="backup-btn" data-action="import-backup">⬆ JSONを読み込む</button>
+      <input type="file" id="import-backup-file" accept=".json,application/json" hidden>
+      <button type="button" class="backup-btn" data-action="copy-chat">🐥 チャトピー用にコピー</button>
+    </div>
+    <p class="card-sub">端末間の移動はJSONを保存して、もう一方で読み込みます。自動同期ではありません。</p>
 
     <div class="section-label">直近7日間</div>
     ${recentKeys.map((d) => renderLogRow(d)).join("")}
@@ -719,6 +738,66 @@ function handleExportBackup(){
   showToast("✓ バックアップをダウンロードしました");
 }
 
+function buildChatText(){
+  const cutoff = addDays(todayKey(), -13);
+  const entries = Store.list().filter(e => e.date >= cutoff && e.date <= todayKey());
+  return `【SKSS Daily：直近14日】\n${entries.length ? entries.map(e => {
+    const lines = [`■ ${e.date}`];
+    for (const c of CATEGORIES) {
+      const items = e[c.key].map(i => i.text).filter(Boolean);
+      if (items.length) lines.push(`${c.emoji}${c.label}：${items.join("／")}`);
+    }
+    if (e.todayGoal) lines.push(`今日の咲候補：${e.todayGoal}`);
+    if (e.memo) lines.push(`メモ：${e.memo}`);
+    return lines.join("\n");
+  }).join("\n\n") : "記録はまだありません"}\n\n最近の進捗を読んで、進んだこと・気になったことを具体的にコメントして。記録がない日は停滞と決めつけず、必要なら私に聞いてください。会話しながら訂正します。`;
+}
+
+async function handleCopyChat(){
+  const value = buildChatText();
+  try {
+    await navigator.clipboard.writeText(value);
+    showToast("✓ コピーしました。ChatGPTに貼り付けてね");
+  } catch (e) {
+    const field = document.createElement("textarea");
+    field.value = value;
+    field.style.cssText = "position:fixed;inset:10%;width:80%;height:70%;z-index:100;background:white;padding:16px";
+    field.setAttribute("aria-label", "チャトピーに渡す日報。全選択してコピーしてください");
+    document.body.appendChild(field);
+    field.focus(); field.select();
+    showToast("文章を選択しました。コピーしてください");
+    field.addEventListener("blur", () => field.remove(), { once: true });
+  }
+}
+
+async function handleImportBackup(file){
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (data.app !== "skss-daily" || data.schemaVersion !== 1 ||
+        !data.entries || typeof data.entries !== "object" || Array.isArray(data.entries)) throw new Error("format");
+    const imported = {};
+    for (const [key, raw] of Object.entries(data.entries)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || !raw || typeof raw !== "object" || raw.date !== key ||
+          CATEGORIES.some(c => !Array.isArray(raw[c.key] || []))) throw new Error("entry");
+      imported[key] = normalizeEntry(raw, key);
+    }
+    const existing = Store._readAll();
+    const collisions = Object.keys(imported).filter(key => key in existing);
+    const message = `${Object.keys(imported).length}日分を読み込みます。${collisions.length ? `同じ日付が${collisions.length}日あります。読み込んだファイルの内容で上書きします。` : ""}先にこの端末のJSONを保存しておくと安心です。続けますか？`;
+    if (!window.confirm(message)) return;
+    if (Store._writeAll({ ...existing, ...imported })) {
+      for (const key of Object.keys(entriesCache)) delete entriesCache[key];
+      state.expandedDate = null; state.expandedMonth = null;
+      render();
+      showToast(`✓ ${Object.keys(imported).length}日分を読み込みました`);
+    }
+  } catch (e) {
+    console.error("SKSS Daily: import failed", e);
+    showToast("⚠ SKSS DailyのJSONを選んでください");
+  }
+}
+
 // A self-contained, human-readable page for skimming or "print to PDF" — kept as
 // plain HTML rather than pulling in a PDF library, per the app's no-dependency rule.
 function buildPrintableHtml(){
@@ -837,6 +916,10 @@ app.addEventListener("click", (e) => {
     handleExportBackup();
   } else if (action === "export-print") {
     handlePrintExport();
+  } else if (action === "copy-chat") {
+    handleCopyChat();
+  } else if (action === "import-backup") {
+    document.getElementById("import-backup-file")?.click();
   } else if (action === "trigger-image") {
     document.getElementById(el.dataset.target)?.click();
   } else if (action === "clear-pending-image") {
@@ -850,6 +933,11 @@ app.addEventListener("click", (e) => {
 document.getElementById("lightbox").addEventListener("click", closeLightbox);
 
 app.addEventListener("change", (e) => {
+  if (e.target.id === "import-backup-file") {
+    handleImportBackup(e.target.files?.[0]);
+    e.target.value = "";
+    return;
+  }
   const checkEl = e.target.closest('[data-action="toggle-check"]');
   if (checkEl) { handleToggleCheck(checkEl.dataset.date, checkEl.dataset.field, checkEl.checked); return; }
 
