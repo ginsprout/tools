@@ -172,6 +172,11 @@
     padding:0 6px;}
   .backup-btn:active{background:var(--sprout-soft);}
 
+  .month-export .backup-row{margin-bottom:0;gap:8px;}
+  .month-export .backup-btn{gap:4px;padding:0 4px;font-size:12.5px;white-space:nowrap;box-shadow:none;}
+  .month-select{width:100%;min-height:44px;border-radius:12px;border:1.5px solid var(--sprout-line);
+    background:var(--paper);color:var(--ink);font-size:14px;font-weight:700;padding:0 12px;margin-bottom:12px;}
+
   .empty-note{font-size:12.5px;color:var(--ink-soft);text-align:center;padding:10px;}
   .memory-list{padding-left:22px;font-size:13.5px;}
   .memory-list li{margin:3px 0;}
@@ -377,7 +382,24 @@ const state = {
   view: "today",       // 'today' | 'logs'
   expandedDate: null,
   expandedMonth: null,  // "YYYY-MM" currently open in the "それ以前" section, or null
+  selectedMonth: todayKey().slice(0, 7), // "YYYY-MM" chosen in the 月ごとに出力 card
 };
+
+/* ---------- month helpers ---------- */
+function formatMonthJP(monthKey){
+  const [y, m] = monthKey.split("-").map(Number);
+  return `${y}年${m}月`;
+}
+
+// months that have at least one record, plus this month — newest first, with day counts
+function exportableMonths(){
+  const counts = new Map([[todayKey().slice(0, 7), 0]]);
+  for (const key of Object.keys(Store._readAll())) {
+    const mk = key.slice(0, 7);
+    counts.set(mk, (counts.get(mk) || 0) + 1);
+  }
+  return Array.from(counts.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+}
 
 /* ---------- escaping ---------- */
 function esc(s){
@@ -553,6 +575,19 @@ function renderLogsView(){
     </div>
     <p class="card-sub">端末間の移動はJSONを保存して、もう一方で読み込みます。自動同期ではありません。</p>
 
+    <section class="card month-export">
+      <h2 class="card-title">📅 月ごとに出力</h2>
+      <p class="card-sub">選んだ月の記録だけを、古い日から順に出します</p>
+      <select id="month-select" class="month-select" aria-label="出力する月">
+        ${exportableMonths().map(([mk, n]) => `<option value="${mk}" ${mk === state.selectedMonth ? "selected" : ""}>${formatMonthJP(mk)}（${n}日分）</option>`).join("")}
+      </select>
+      <div class="backup-row">
+        <button type="button" class="backup-btn" data-action="month-print">🖨 印刷／PDF</button>
+        <button type="button" class="backup-btn" data-action="month-json">⬇ JSON</button>
+        <button type="button" class="backup-btn" data-action="month-chat">🐥 チャトピー用</button>
+      </div>
+    </section>
+
     <div class="section-label">直近7日間</div>
     ${recentKeys.map((d) => renderLogRow(d)).join("")}
 
@@ -719,29 +754,43 @@ function handleEditMemo(date, value){
   persistEntry(date);
 }
 
-function handleExportBackup(){
+// month: "YYYY-MM" to export just that month (same file shape, so it imports as-is), or omit for everything
+function handleExportBackup(month){
+  const all = Store._readAll();
+  const entries = month
+    ? Object.fromEntries(Object.entries(all).filter(([key]) => key.startsWith(`${month}-`)))
+    : all;
   const data = {
     app: "skss-daily",
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
-    entries: Store._readAll(),
+    entries,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `skss-daily-backup-${todayKey()}.json`;
+  a.download = month ? `skss-daily-${month}.json` : `skss-daily-backup-${todayKey()}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  showToast("✓ バックアップをダウンロードしました");
+  showToast(month ? `✓ ${formatMonthJP(month)}分をダウンロードしました` : "✓ バックアップをダウンロードしました");
 }
 
-function buildChatText(){
-  const cutoff = addDays(todayKey(), -13);
-  const entries = Store.list().filter(e => e.date >= cutoff && e.date <= todayKey());
-  return `【SKSS Daily：直近14日】\n${entries.length ? entries.map(e => {
+function buildChatText(month){
+  let entries, title, request;
+  if (month) {
+    entries = Store.list().filter(e => e.date.startsWith(`${month}-`)).reverse(); // oldest first
+    title = formatMonthJP(month);
+    request = "この月の記録を読んで、進んだこと・気になったことを具体的にコメントして。";
+  } else {
+    const cutoff = addDays(todayKey(), -13);
+    entries = Store.list().filter(e => e.date >= cutoff && e.date <= todayKey());
+    title = "直近14日";
+    request = "最近の進捗を読んで、進んだこと・気になったことを具体的にコメントして。";
+  }
+  return `【SKSS Daily：${title}】\n${entries.length ? entries.map(e => {
     const lines = [`■ ${e.date}`];
     for (const c of CATEGORIES) {
       const items = e[c.key].map(i => i.text).filter(Boolean);
@@ -750,11 +799,11 @@ function buildChatText(){
     if (e.todayGoal) lines.push(`今日の咲候補：${e.todayGoal}`);
     if (e.memo) lines.push(`メモ：${e.memo}`);
     return lines.join("\n");
-  }).join("\n\n") : "記録はまだありません"}\n\n最近の進捗を読んで、進んだこと・気になったことを具体的にコメントして。記録がない日は停滞と決めつけず、必要なら私に聞いてください。会話しながら訂正します。`;
+  }).join("\n\n") : "記録はまだありません"}\n\n${request}記録がない日は停滞と決めつけず、必要なら私に聞いてください。会話しながら訂正します。`;
 }
 
-async function handleCopyChat(){
-  const value = buildChatText();
+async function handleCopyChat(month){
+  const value = buildChatText(month);
   try {
     await navigator.clipboard.writeText(value);
     showToast("✓ コピーしました。ChatGPTに貼り付けてね");
@@ -800,8 +849,12 @@ async function handleImportBackup(file){
 
 // A self-contained, human-readable page for skimming or "print to PDF" — kept as
 // plain HTML rather than pulling in a PDF library, per the app's no-dependency rule.
-function buildPrintableHtml(){
-  const entries = Store.list(); // newest first
+// month: "YYYY-MM" for just that month in date order (oldest first), or omit for everything (newest first)
+function buildPrintableHtml(month){
+  const entries = month
+    ? Store.list().filter((e) => e.date.startsWith(`${month}-`)).reverse()
+    : Store.list();
+  const heading = month ? `${formatMonthJP(month)}の記録` : "バックアップ";
   const rows = entries.map((e) => {
     const catsHtml = CATEGORIES.map((c) => {
       const items = e[c.key] || [];
@@ -822,7 +875,7 @@ function buildPrintableHtml(){
   }).join("");
 
   return `<!DOCTYPE html>
-<html lang="ja"><head><meta charset="UTF-8"><title>SKSS Daily バックアップ ${esc(todayKey())}</title>
+<html lang="ja"><head><meta charset="UTF-8"><title>SKSS Daily ${esc(heading)} ${esc(month || todayKey())}</title>
 <style>
   body{font-family:"Hiragino Sans","Yu Gothic",-apple-system,sans-serif;color:#2c372e;
     padding:28px 24px;max-width:720px;margin:0 auto;line-height:1.6;}
@@ -841,13 +894,13 @@ function buildPrintableHtml(){
   @media print{ body{padding:0;} }
 </style></head>
 <body>
-  <h1>🌱🌳🌿🌸 SKSS Daily バックアップ</h1>
+  <h1>🌱🌳🌿🌸 SKSS Daily ${esc(heading)}</h1>
   <p class="meta">書き出し日時：${esc(new Date().toLocaleString("ja-JP"))} ／ 記録件数：${entries.length}件</p>
   ${entries.length ? rows : "<p>まだ記録がありません。</p>"}
 </body></html>`;
 }
 
-function handlePrintExport(){
+function handlePrintExport(month){
   const win = window.open("", "_blank");
   if (!win) {
     showToast("ポップアップがブロックされました");
@@ -855,7 +908,7 @@ function handlePrintExport(){
   }
   let html;
   try {
-    html = buildPrintableHtml();
+    html = buildPrintableHtml(month);
   } catch (e) {
     console.error("SKSS Daily: failed to build printable page", e);
     win.close();
@@ -918,6 +971,12 @@ app.addEventListener("click", (e) => {
     handlePrintExport();
   } else if (action === "copy-chat") {
     handleCopyChat();
+  } else if (action === "month-print") {
+    handlePrintExport(state.selectedMonth);
+  } else if (action === "month-json") {
+    handleExportBackup(state.selectedMonth);
+  } else if (action === "month-chat") {
+    handleCopyChat(state.selectedMonth);
   } else if (action === "import-backup") {
     document.getElementById("import-backup-file")?.click();
   } else if (action === "trigger-image") {
@@ -936,6 +995,10 @@ app.addEventListener("change", (e) => {
   if (e.target.id === "import-backup-file") {
     handleImportBackup(e.target.files?.[0]);
     e.target.value = "";
+    return;
+  }
+  if (e.target.id === "month-select") {
+    state.selectedMonth = e.target.value;
     return;
   }
   const checkEl = e.target.closest('[data-action="toggle-check"]');
