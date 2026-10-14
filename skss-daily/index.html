@@ -1016,18 +1016,14 @@ app.addEventListener("input", (e) => {
   if (memoEl) handleEditMemo(memoEl.dataset.date, memoEl.value);
 });
 
-// IME (日本語入力) の変換確定Enterで誤って追加されないよう、変換中は無視する
-let composing = false;
-app.addEventListener("compositionstart", (e) => {
-  if (e.target.closest('[data-action="add-input"]')) composing = true;
-});
-app.addEventListener("compositionend", (e) => {
-  if (e.target.closest('[data-action="add-input"]')) composing = false;
-});
-
+// IME (日本語入力) の変換確定Enterで誤って追加されないよう、変換中は無視する。
+// 以前はcompositionstart/endで自前のフラグも立てていたが、スマホでは入力中に
+// フォーカスが外れるなどでcompositionendが来ないことがあり、フラグが true の
+// まま固まって二度とEnterで追加できなくなる不具合があった。isComposing は
+// イベントごとに毎回読み直される値で固着しないため、これだけに頼る。
 app.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
-  if (composing || e.isComposing || e.keyCode === 229) return;
+  if (e.isComposing || e.keyCode === 229) return;
   const el = e.target.closest('[data-action="add-input"]');
   if (!el) return;
   e.preventDefault();
