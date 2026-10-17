@@ -181,6 +181,22 @@
   .memory-list{padding-left:22px;font-size:13.5px;}
   .memory-list li{margin:3px 0;}
 
+  /* GitHub sync */
+  .sync-status{display:flex;align-items:center;gap:8px;min-height:40px;padding:9px 14px;margin-bottom:8px;
+    border-radius:12px;font-size:13.5px;font-weight:700;border:1.5px solid var(--line);background:var(--paper);
+    color:var(--ink-soft);overflow-wrap:anywhere;}
+  .sync-status:empty{display:none;}
+  .sync-status.ok{background:var(--sprout-soft);border-color:var(--sprout-line);color:var(--sprout-deep);}
+  .sync-status.error{background:#fbe5e1;border-color:#efb7ab;color:#a3321f;}
+  .sync-status.busy{background:#fff;}
+  .sync-card input{width:100%;min-height:48px;border:1.5px solid var(--line);border-radius:12px;
+    padding:11px 13px;font-size:16px;background:#fff;margin-bottom:10px;}
+  .sync-card input:focus{outline:2px solid var(--sprout-line);outline-offset:1px;border-color:var(--sprout);}
+  .sync-card .backup-row{margin-bottom:0;}
+  .sync-card .backup-btn{min-height:48px;box-shadow:none;font-size:14px;}
+  .sync-card .backup-btn.primary{background:var(--sprout-deep);border-color:var(--sprout-deep);color:#fff;}
+  .sync-card .backup-btn.danger{border-color:#efb7ab;color:#a3321f;}
+
   /* toast */
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
     background:var(--sprout-deep);color:#fff;padding:11px 20px;border-radius:999px;font-size:13.5px;
@@ -346,6 +362,225 @@ function persistEntry(date){
   Store.save(getEntry(date));
 }
 
+/* ---------- GitHub sync ----------
+   The token lives only in this browser's localStorage — never in this file or any repo.
+   Data goes to a separate PRIVATE repo, since this app's own repo is public. */
+const GITHUB = { owner: "ginsprout", repo: "skss-daily-data", path: "entries.json" };
+const TOKEN_KEY = "skssDaily.githubToken";
+const GITHUB_URL = `https://api.github.com/repos/${GITHUB.owner}/${GITHUB.repo}/contents/${GITHUB.path}`;
+
+class SyncError extends Error {
+  constructor(message, status){ super(message); this.status = status; }
+}
+
+function base64ToUtf8(b64){
+  const bin = atob(b64.replace(/\s/g, ""));
+  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+}
+function utf8ToBase64(text){
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+// per day, keep whichever side was edited more recently
+function mergeEntries(local, remote){
+  const merged = { ...local };
+  for (const [key, raw] of Object.entries(remote)) {
+    if (!raw || typeof raw !== "object") continue;
+    const mine = local[key];
+    if (!mine || (raw.updatedAt || "") > (mine.updatedAt || "")) merged[key] = raw;
+  }
+  return merged;
+}
+
+const Sync = {
+  status: { kind: "", text: "" }, // kind: "" | "busy" | "ok" | "error"
+  _busy: false,
+  _again: false,
+
+  getToken(){
+    try { return localStorage.getItem(TOKEN_KEY) || ""; } catch (e) { return ""; }
+  },
+  setToken(token){
+    try { localStorage.setItem(TOKEN_KEY, token); } catch (e) { /* storage blocked: stays unconnected */ }
+  },
+  clearToken(){
+    try { localStorage.removeItem(TOKEN_KEY); } catch (e) { /* nothing to clear */ }
+  },
+  connected(){ return !!this.getToken(); },
+
+  setStatus(kind, text){
+    this.status = { kind, text };
+    document.querySelectorAll("[data-sync-status]").forEach((el) => {
+      el.className = `sync-status ${kind}`;
+      el.textContent = text;
+    });
+  },
+
+  async _fetch(method, { accept = "application/vnd.github+json", body } = {}){
+    let res;
+    try {
+      res = await fetch(GITHUB_URL, {
+        method,
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${this.getToken()}`,
+          Accept: accept,
+          "X-GitHub-Api-Version": "2022-11-28",
+          ...(body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (e) {
+      throw new SyncError("ネットにつながっていないようです", 0);
+    }
+    if (res.status === 401) throw new SyncError("トークンが正しくないか、期限切れです", 401);
+    if (res.status === 403 || res.status === 404) throw new SyncError("データ用リポジトリに入れません。トークンの権限を確認してください", res.status);
+    if (res.status === 409 || res.status === 422) throw new SyncError("ほかの端末と同時に保存されました", 409);
+    if (!res.ok) throw new SyncError(`GitHubがエラーを返しました（${res.status}）`, res.status);
+    return res;
+  },
+
+  // returns { sha, entries } for the latest entries.json on GitHub
+  async _pull(){
+    const meta = await (await this._fetch("GET")).json();
+    let text;
+    if (meta.content) {
+      text = base64ToUtf8(meta.content);
+    } else {
+      // over 1MB the API leaves `content` empty, so fetch the raw file instead
+      text = await (await this._fetch("GET", { accept: "application/vnd.github.raw+json" })).text();
+    }
+    const data = text.trim() ? JSON.parse(text) : {};
+    const entries = data.entries && typeof data.entries === "object" ? data.entries : {};
+    return { sha: meta.sha, entries };
+  },
+
+  // merges GitHub's copy into this device; returns true if anything here changed
+  _applyRemote(remoteEntries){
+    const local = Store._readAll();
+    const merged = mergeEntries(local, remoteEntries);
+    const changed = JSON.stringify(merged) !== JSON.stringify(local);
+    if (changed && Store._writeAll(merged)) {
+      for (const key of Object.keys(entriesCache)) delete entriesCache[key];
+    }
+    return changed;
+  },
+
+  _refreshView(){
+    // don't yank the page out from under someone who's mid-typing
+    const active = document.activeElement;
+    if (active && app.contains(active) && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
+    render();
+  },
+
+  async load(){
+    if (!this.connected()) return;
+    this.setStatus("busy", "☁ GitHubから読み込み中…");
+    try {
+      const { entries } = await this._pull();
+      if (this._applyRemote(entries)) this._refreshView();
+      this.setStatus("ok", `✓ GitHubから最新を読み込みました（${clockNow()}）`);
+      return true;
+    } catch (e) {
+      console.error("SKSS Daily: GitHub load failed", e);
+      this.setStatus("error", `⚠ GitHubから読み込めませんでした：${e instanceof SyncError ? e.message : "データの形式が正しくありません"}`);
+      return false;
+    }
+  },
+
+  async save(){
+    if (!this.connected()) return;
+    if (this._busy) { this._again = true; return; } // a second tap while saving just queues one more push
+    this._busy = true;
+    this.setStatus("busy", "☁ GitHubに保存中…");
+    try {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          // pull first so edits made on the other device aren't overwritten
+          const { sha, entries } = await this._pull();
+          if (this._applyRemote(entries)) this._refreshView();
+          const all = Store._readAll();
+          const content = JSON.stringify({ app: "skss-daily", schemaVersion: 1, exportedAt: new Date().toISOString(), entries: all }, null, 2);
+          await this._fetch("PUT", { body: {
+            message: `Update SKSS Daily (${todayKey()})`,
+            content: utf8ToBase64(content + "\n"),
+            sha,
+          } });
+          break;
+        } catch (e) {
+          if (e instanceof SyncError && e.status === 409 && attempt < 2) continue;
+          throw e;
+        }
+      }
+      this.setStatus("ok", `✓ GitHubに保存しました（${clockNow()}）`);
+    } catch (e) {
+      console.error("SKSS Daily: GitHub save failed", e);
+      this.setStatus("error", `⚠ GitHubに保存できませんでした：${e instanceof SyncError ? e.message : "データの形式が正しくありません"}。この端末には保存済みです`);
+    } finally {
+      this._busy = false;
+      if (this._again) { this._again = false; this.save(); }
+    }
+  },
+};
+
+function clockNow(){
+  const d = new Date();
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function renderSyncStatus(){
+  return `<div class="sync-status ${Sync.status.kind}" data-sync-status role="status" aria-live="polite">${esc(Sync.status.text)}</div>`;
+}
+
+function renderSyncCard(){
+  if (!Sync.connected()) {
+    return `
+      <section class="card sync-card">
+        <h2 class="card-title">☁ GitHub連携（未設定）</h2>
+        <p class="card-sub">トークンを1回入れると、Macとスマホで同じ日報を見られます。トークンはこの端末の中だけに保存されます。</p>
+        <input type="password" id="github-token-input" placeholder="github_pat_… を貼り付け"
+          autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="GitHubのトークン">
+        <div class="backup-row">
+          <button type="button" class="backup-btn primary" data-action="connect-github">接続する</button>
+        </div>
+      </section>`;
+  }
+  return `
+    <section class="card sync-card">
+      <h2 class="card-title">☁ GitHub連携中</h2>
+      <p class="card-sub">開いたときに読み込み、「保存する」を押したときにGitHubへ保存します（${esc(`${GITHUB.owner}/${GITHUB.repo}`)}）。</p>
+      <div class="backup-row">
+        <button type="button" class="backup-btn" data-action="pull-github">↻ 今すぐ読み込む</button>
+        <button type="button" class="backup-btn danger" data-action="disconnect-github">トークンを消す</button>
+      </div>
+    </section>`;
+}
+
+async function handleConnectGithub(){
+  const input = document.getElementById("github-token-input");
+  const token = input ? input.value.trim() : "";
+  if (!token) { input?.focus(); return; }
+  Sync.setToken(token);
+  if (await Sync.load()) {
+    render(); // swap the setup card for the connected one
+    Sync.save(); // push anything that was only on this device so far
+  } else {
+    // a token that can't reach the repo isn't worth keeping
+    Sync.clearToken();
+    render();
+  }
+}
+
+function handleDisconnectGithub(){
+  if (!window.confirm("この端末からトークンを消します。日報のデータは消えません。続けますか？")) return;
+  Sync.clearToken();
+  Sync.setStatus("", "");
+  render();
+}
+
 // image chosen but not yet attached to an item, keyed by the add-row's text input id
 const pendingImages = new Map();
 
@@ -499,11 +734,14 @@ function renderTodayView(){
     </section>
 
     <div class="save-bar">
+      ${renderSyncStatus()}
       <button type="button" class="btn-save" data-action="save">✓ 保存する</button>
     </div>
 
     <button type="button" class="link-btn" data-action="open-logs">📖 過去ログを見る</button>
     <button type="button" class="link-btn" data-action="copy-chat">🐥 最近の日報をチャトピー用にコピー</button>
+
+    ${Sync.connected() ? "" : renderSyncCard()}
   `;
 }
 
@@ -559,6 +797,8 @@ function renderLogsView(){
       <span class="logs-title">📖 過去ログ</span>
     </div>
 
+    ${renderSyncStatus()}
+
     <section class="top-summary">
       <div class="date-badge">今週の記録</div>
       <div class="week-badge">🌸 今週 ${weekCount}件</div>
@@ -573,7 +813,11 @@ function renderLogsView(){
       <input type="file" id="import-backup-file" accept=".json,application/json" hidden>
       <button type="button" class="backup-btn" data-action="copy-chat">🐥 チャトピー用にコピー</button>
     </div>
-    <p class="card-sub">端末間の移動はJSONを保存して、もう一方で読み込みます。自動同期ではありません。</p>
+    <p class="card-sub">${Sync.connected()
+      ? "GitHub連携中なので、Macとスマホの記録は自動でそろいます。JSONは手元に控えを残したいとき用です。"
+      : "端末間の移動はJSONを保存して、もう一方で読み込みます（下のGitHub連携を使うと自動でそろいます）。"}</p>
+
+    ${renderSyncCard()}
 
     <section class="card month-export">
       <h2 class="card-title">📅 月ごとに出力</h2>
@@ -944,12 +1188,19 @@ app.addEventListener("click", (e) => {
     handleRemoveItem(el.dataset.date, el.dataset.cat, Number(el.dataset.index));
   } else if (action === "save") {
     persistEntry(todayKey());
-    showToast("✓ 保存しました");
+    if (Sync.connected()) Sync.save(); else showToast("✓ 保存しました");
   } else if (action === "save-log") {
     persistEntry(el.dataset.date);
     state.expandedDate = null;
-    showToast("✓ 保存しました");
+    if (!Sync.connected()) showToast("✓ 保存しました");
     render();
+    if (Sync.connected()) Sync.save();
+  } else if (action === "connect-github") {
+    handleConnectGithub();
+  } else if (action === "disconnect-github") {
+    handleDisconnectGithub();
+  } else if (action === "pull-github") {
+    Sync.load();
   } else if (action === "open-logs") {
     state.view = "logs";
     state.expandedDate = null;
@@ -1032,6 +1283,7 @@ app.addEventListener("keydown", (e) => {
 
 /* ---------- init ---------- */
 render();
+Sync.load();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
