@@ -484,6 +484,69 @@
   }
   .btn-modal-cancel:hover { border-color: var(--ghost); color: var(--paper-dim); }
 
+  /* ── GitHub同期 ── */
+  #sync-status {
+    position: sticky;
+    top: 8px;
+    z-index: 50;
+    width: 100%;
+    max-width: 680px;
+    margin-top: 12px;
+    padding: 10px 14px;
+    border: 1px solid #3a3550;
+    border-radius: 3px;
+    background: #22223a;
+    color: var(--paper-dim);
+    font-size: .8rem;
+    line-height: 1.6;
+  }
+  #sync-status:empty { display: none; }
+  #sync-status.ok    { border-color: var(--teal); color: #a9cfcf; }
+  #sync-status.error { border-color: #c4705a; background: #3a2226; color: #f0b8a8; }
+
+  .sync-section {
+    width: 100%;
+    max-width: 680px;
+    margin-top: 44px;
+    padding: 18px;
+    border: 1px solid #3a3550;
+    border-radius: 3px;
+  }
+  .sync-note {
+    font-size: .8rem;
+    line-height: 1.8;
+    color: var(--ghost);
+    margin-bottom: 14px;
+  }
+  .sync-input {
+    width: 100%;
+    min-height: 48px;
+    background: transparent;
+    border: 1px solid #3a3550;
+    border-radius: 2px;
+    padding: 10px 14px;
+    color: var(--paper);
+    font-family: 'DM Mono', monospace;
+    font-size: 16px;
+    outline: none;
+    margin-bottom: 10px;
+  }
+  .sync-input:focus { border-color: var(--teal); }
+  .sync-actions { display: flex; gap: 10px; }
+  .btn-sync {
+    flex: 1;
+    min-height: 48px;
+    background: none;
+    border: 1px solid var(--teal);
+    color: #a9cfcf;
+    border-radius: 2px;
+    font-family: 'Noto Serif JP', serif;
+    font-size: .85rem;
+    cursor: pointer;
+  }
+  .btn-sync.primary { background: var(--teal); color: #f0ece4; }
+  .btn-sync.danger  { border-color: #c4705a; color: #f0b8a8; }
+
   /* ── トースト ── */
   #toast {
     position: fixed;
@@ -524,6 +587,8 @@
   <span class="brand">Ginsprout</span>
   <span class="brand-sub">Idea Catcher</span>
 </header>
+
+<div id="sync-status" role="status" aria-live="polite"></div>
 
 <!-- AIピックアップカード -->
 <div id="ai-card" style="display:none">
@@ -574,6 +639,9 @@
   <div id="archive-list"></div>
 </div>
 
+<!-- GitHub同期（中身はrenderSyncSectionで描画） -->
+<div class="sync-section" id="sync-section"></div>
+
 <!-- 編集モーダル -->
 <div id="edit-modal">
   <div class="modal-box">
@@ -597,8 +665,245 @@ function loadIdeas() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
   catch { return []; }
 }
-function saveIdeas(ideas) {
+function writeIdeas(ideas) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(ideas));
+}
+// 端末に保存して、GitHub連携中ならGitHubにも送る
+function saveIdeas(ideas) {
+  writeIdeas(ideas);
+  Sync.save();
+}
+
+// 削除したアイデアの { id, deletedAt }。同期で別端末の古いコピーから復活しないよう覚えておく
+const DELETED_KEY = 'ginsprout_ideas_deleted_v1';
+function loadDeleted() {
+  try { return JSON.parse(localStorage.getItem(DELETED_KEY)) || []; }
+  catch { return []; }
+}
+function writeDeleted(list) {
+  localStorage.setItem(DELETED_KEY, JSON.stringify(list));
+}
+// 同じidは新しい削除時刻だけ残す
+function mergeDeleted(a, b) {
+  const byId = new Map();
+  for (const d of [...a, ...b]) {
+    if (d && d.id && (!byId.has(d.id) || d.deletedAt > byId.get(d.id).deletedAt)) byId.set(d.id, d);
+  }
+  return [...byId.values()];
+}
+
+/* ── GitHub同期 ──
+   トークンはこのブラウザのlocalStorageだけに保存（コードやリポジトリには書かない）。
+   SKSS Dailyと同じサイト・同じ非公開リポジトリなので、トークンも共有する。 */
+const GITHUB_URL = 'https://api.github.com/repos/ginsprout/skss-daily-data/contents/ideas.json';
+const TOKEN_KEY  = 'skssDaily.githubToken';
+
+class SyncError extends Error {
+  constructor(message, status) { super(message); this.status = status; }
+}
+
+function base64ToUtf8(b64) {
+  const bin = atob(b64.replace(/\s/g, ''));
+  return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+}
+function utf8ToBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+// 同じidは「最後に直した時間」が新しい方を残す。削除のあとに直した（復元した）もの以外は消す
+function mergeIdeas(local, remote, deleted) {
+  const deletedAt = new Map(deleted.map(d => [d.id, d.deletedAt]));
+  const byId = new Map();
+  const version = i => i.updatedAt || i.createdAt || '';
+  for (const idea of [...local, ...remote]) {
+    if (!idea || !idea.id) continue;
+    if (deletedAt.has(idea.id) && deletedAt.get(idea.id) >= version(idea)) continue;
+    const mine = byId.get(idea.id);
+    if (!mine || version(idea) > version(mine)) byId.set(idea.id, idea);
+  }
+  return [...byId.values()].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+}
+
+function clockNow() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+const Sync = {
+  _busy: false,
+  _again: false,
+
+  getToken() {
+    try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; }
+  },
+  setToken(token) {
+    try { localStorage.setItem(TOKEN_KEY, token); } catch { /* 保存できない環境では未接続のまま */ }
+  },
+  clearToken() {
+    try { localStorage.removeItem(TOKEN_KEY); } catch { /* 消すものがない */ }
+  },
+  connected() { return !!this.getToken(); },
+
+  setStatus(kind, text) {
+    const el = document.getElementById('sync-status');
+    el.className = kind;
+    el.textContent = text;
+  },
+
+  async _fetch(method, { accept = 'application/vnd.github+json', body } = {}) {
+    let res;
+    try {
+      res = await fetch(GITHUB_URL, {
+        method,
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${this.getToken()}`,
+          Accept: accept,
+          'X-GitHub-Api-Version': '2022-11-28',
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch {
+      throw new SyncError('ネットにつながっていないようです', 0);
+    }
+    if (res.status === 401) throw new SyncError('トークンが正しくないか、期限切れです', 401);
+    if (res.status === 403 || res.status === 404) throw new SyncError('データ用リポジトリに入れません。トークンの権限を確認してください', res.status);
+    if (res.status === 409 || res.status === 422) throw new SyncError('ほかの端末と同時に保存されました', 409);
+    if (!res.ok) throw new SyncError(`GitHubがエラーを返しました（${res.status}）`, res.status);
+    return res;
+  },
+
+  // GitHub上の最新のideas.jsonを { sha, ideas, deleted } で返す
+  async _pull() {
+    const meta = await (await this._fetch('GET')).json();
+    // 1MBを超えるとcontentが空になるので、そのときは中身だけ取り直す
+    const text = meta.content
+      ? base64ToUtf8(meta.content)
+      : await (await this._fetch('GET', { accept: 'application/vnd.github.raw+json' })).text();
+    const data = text.trim() ? JSON.parse(text) : {};
+    return {
+      sha: meta.sha,
+      ideas: Array.isArray(data.ideas) ? data.ideas : [],
+      deleted: Array.isArray(data.deleted) ? data.deleted : [],
+    };
+  },
+
+  // GitHubの内容をこの端末にまとめる。変わったものがあればtrue
+  _applyRemote(remote) {
+    const deleted = mergeDeleted(loadDeleted(), remote.deleted);
+    const local  = loadIdeas();
+    const merged = mergeIdeas(local, remote.ideas, deleted);
+    writeDeleted(deleted);
+    const changed = JSON.stringify(merged) !== JSON.stringify(local);
+    if (changed) writeIdeas(merged);
+    return changed;
+  },
+
+  _refreshView() {
+    renderAll();
+    // 最初は空だった端末に、GitHubからアイデアが届いたとき
+    if (loadIdeas().length && document.getElementById('ai-card').style.display === 'none') pickRandom();
+  },
+
+  async load() {
+    if (!this.connected()) return false;
+    this.setStatus('busy', '☁ GitHubから読み込み中…');
+    try {
+      if (this._applyRemote(await this._pull())) this._refreshView();
+      this.setStatus('ok', `✓ GitHubから最新を読み込みました（${clockNow()}）`);
+      return true;
+    } catch (e) {
+      console.error('Idea Catcher: GitHub load failed', e);
+      this.setStatus('error', `⚠ GitHubから読み込めませんでした：${e instanceof SyncError ? e.message : 'データの形式が正しくありません'}`);
+      return false;
+    }
+  },
+
+  async save() {
+    if (!this.connected()) return;
+    if (this._busy) { this._again = true; return; } // 保存中の操作は、終わったあとにもう1回まとめて送る
+    this._busy = true;
+    this.setStatus('busy', '☁ GitHubに保存中…');
+    try {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          // 先に読み込んで、ほかの端末で足したアイデアを消さないようにする
+          const remote = await this._pull();
+          if (this._applyRemote(remote)) this._refreshView();
+          const content = JSON.stringify({
+            app: 'idea-catcher',
+            schemaVersion: 1,
+            ideas: loadIdeas(),
+            deleted: loadDeleted(),
+          }, null, 2);
+          await this._fetch('PUT', { body: {
+            message: `Update Idea Catcher (${new Date().toISOString().slice(0, 10)})`,
+            content: utf8ToBase64(content + '\n'),
+            sha: remote.sha,
+          } });
+          break;
+        } catch (e) {
+          if (e instanceof SyncError && e.status === 409 && attempt < 2) continue;
+          throw e;
+        }
+      }
+      this.setStatus('ok', `✓ GitHubに保存しました（${clockNow()}）`);
+    } catch (e) {
+      console.error('Idea Catcher: GitHub save failed', e);
+      this.setStatus('error', `⚠ GitHubに保存できませんでした：${e instanceof SyncError ? e.message : 'データの形式が正しくありません'}。この端末には保存済みです`);
+    } finally {
+      this._busy = false;
+      if (this._again) { this._again = false; this.save(); }
+    }
+  },
+};
+
+function renderSyncSection() {
+  const el = document.getElementById('sync-section');
+  if (!Sync.connected()) {
+    el.innerHTML = `
+      <div class="section-label">GitHub Sync</div>
+      <p class="sync-note">☁ GitHub連携（未設定）<br>SKSS日報で使っているトークンを貼ると、Macとスマホで同じアイデアを見られます。トークンはこの端末の中だけに保存されます。</p>
+      <input id="github-token-input" class="sync-input" type="password" placeholder="github_pat_… を貼り付け"
+        autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="GitHubのトークン">
+      <div class="sync-actions">
+        <button class="btn-sync primary" onclick="connectGithub()">接続する</button>
+      </div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="section-label">GitHub Sync</div>
+    <p class="sync-note">☁ GitHub連携中<br>開いたときに読み込み、アイデアを追加・編集・削除するたびにGitHubへ保存します。</p>
+    <div class="sync-actions">
+      <button class="btn-sync" onclick="Sync.load()">↻ 今すぐ読み込む</button>
+      <button class="btn-sync danger" onclick="disconnectGithub()">トークンを消す</button>
+    </div>`;
+}
+
+async function connectGithub() {
+  const input = document.getElementById('github-token-input');
+  const token = input ? input.value.trim() : '';
+  if (!token) { input?.focus(); return; }
+  Sync.setToken(token);
+  if (await Sync.load()) {
+    renderSyncSection();
+    Sync.save(); // この端末にしかなかったアイデアもGitHubへ送る
+  } else {
+    // リポジトリに入れないトークンは残さない
+    Sync.clearToken();
+    renderSyncSection();
+  }
+}
+
+function disconnectGithub() {
+  if (!confirm('この端末からトークンを消します。SKSS日報の連携も一緒に外れます（どちらのデータも消えません）。続けますか？')) return;
+  Sync.clearToken();
+  Sync.setStatus('', '');
+  renderSyncSection();
 }
 
 function formatDate(iso) {
@@ -753,6 +1058,7 @@ function toggleArchive() {
 
 function deleteIdea(id) {
   const ideas = loadIdeas().filter(i => i.id !== id);
+  writeDeleted(mergeDeleted(loadDeleted(), [{ id, deletedAt: new Date().toISOString() }]));
   saveIdeas(ideas);
   showToast('削除しました');
   renderAll();
@@ -784,7 +1090,7 @@ function saveEdit() {
   const tagRaw = document.getElementById('edit-tag').value.trim();
   const tags   = tagRaw ? tagRaw.split(/\s+/).filter(Boolean) : [];
   const ideas = loadIdeas().map(i =>
-    i.id === editingId ? { ...i, title, memo, tags } : i
+    i.id === editingId ? { ...i, title, memo, tags, updatedAt: new Date().toISOString() } : i
   );
   saveIdeas(ideas);
   closeModal();
@@ -825,7 +1131,11 @@ function importIdeas(event) {
 
     const current = loadIdeas();
     const existingIds = new Set(current.map(i => i.id));
-    const newOnes = imported.filter(i => i && i.id && !existingIds.has(i.id));
+    const wasDeleted = new Set(loadDeleted().map(d => d.id));
+    const now = new Date().toISOString();
+    // 前に削除したアイデアも、復元したなら「今直した」扱いにして同期で消えないようにする
+    const newOnes = imported.filter(i => i && i.id && !existingIds.has(i.id))
+      .map(i => wasDeleted.has(i.id) ? { ...i, updatedAt: now } : i);
     saveIdeas(current.concat(newOnes));
     renderAll();
 
@@ -940,6 +1250,8 @@ function renderAll() {
 window.addEventListener('load', () => {
   renderArchive();
   pickRandom();
+  renderSyncSection();
+  Sync.load();
 
   // Enterキーで保存
   // モーダル背景クリックで閉じる
