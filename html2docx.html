@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ポイッとWord</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&family=Shippori+Mincho:wght@600&display=swap">
+<style>
+/* layout: 左に「投げ入れ口」、右に「中身の見本」。狭い画面では縦に積む */
+:root{
+  --bg:#f3f4f1; --surface:#ffffff; --fg:#23272a; --muted:#69706f;
+  --line:#d6dbd6; --accent:#5c7f6c; --accent-fg:#ffffff; --silver:#a7aeab;
+  --warn:#9a5b1d;
+  --display:"Shippori Mincho","Yu Mincho","Hiragino Mincho ProN",serif;
+  --body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#1b1e1d; --surface:#242827; --fg:#e6e9e7; --muted:#9aa29f;
+  --line:#3a403e; --accent:#8fb59f; --accent-fg:#14201a; --silver:#6f7774; --warn:#e0a35f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#1b1e1d; --surface:#242827; --fg:#e6e9e7; --muted:#9aa29f;
+  --line:#3a403e; --accent:#8fb59f; --accent-fg:#14201a; --silver:#6f7774; --warn:#e0a35f; color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.7}
+.wrap{max-width:1040px;margin:0 auto;padding-block:28px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:grid;gap:20px}
+header h1{font-family:var(--display);font-weight:600;font-size:1.9rem;margin:0;letter-spacing:.04em;text-wrap:balance}
+header p{margin:4px 0 0;color:var(--muted)}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+@media (max-width:760px){.cols{grid-template-columns:minmax(0,1fr)}}
+.panel{display:grid;gap:12px;align-content:start;min-width:0}
+.label{font-size:.75rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.drop{border:2px dashed var(--silver);border-radius:10px;background:var(--surface);
+  padding:28px 16px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.drop:hover,.drop:focus-visible,.drop.over{border-color:var(--accent);outline:none}
+.drop.over{background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.drop strong{display:block;font-size:1.05rem}
+.drop span{color:var(--muted);font-size:.9rem}
+textarea{width:100%;box-sizing:border-box;min-height:180px;resize:vertical;font:13px/1.5 var(--mono);
+  background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px}
+textarea:focus-visible,select:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.opts{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.opts label{display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
+select,input[type=text]{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+input[type=text]{min-width:0;width:14em;max-width:100%}
+.go{font:inherit;font-weight:700;font-size:1.05rem;background:var(--accent);color:var(--accent-fg);
+  border:0;border-radius:8px;padding:12px 22px;cursor:pointer}
+.go:disabled{opacity:.5;cursor:wait}
+.status{min-height:1.5em;font-size:.9rem;color:var(--muted)}
+.status.warn{color:var(--warn)}
+.paper{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:28px 24px;
+  min-height:300px;max-height:560px;overflow:auto;font-family:var(--display);font-weight:400;line-height:1.85}
+.paper :is(h1,h2,h3,h4){font-family:var(--display);line-height:1.4}
+.paper table{border-collapse:collapse}
+.paper td,.paper th{border:1px solid var(--line);padding:4px 8px}
+.paper img{max-width:100%}
+.note{font-size:.85rem;color:var(--muted);margin:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>ポイッとWord</h1>
+    <p>HTMLを投げ入れると、Word（.docx）にしてペッと出します。</p>
+  </header>
+
+  <div class="cols">
+    <section class="panel" aria-label="入力">
+      <div class="label">① 投げ入れ口</div>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="HTMLファイルを選ぶ">
+        <strong>ここに .html をドロップ</strong>
+        <span>またはクリックして選ぶ</span>
+        <input type="file" id="file" accept=".html,.htm,text/html" hidden>
+      </div>
+      <div class="label">または HTML を直接貼りつけ</div>
+      <textarea id="src" spellcheck="false" aria-label="HTMLソース"></textarea>
+
+      <div class="opts">
+        <label>文字の雰囲気
+          <select id="font">
+            <option value="mincho">明朝（読みもの向け）</option>
+            <option value="gothic">ゴシック（資料向け）</option>
+          </select>
+        </label>
+        <label>おもに開くアプリ
+          <select id="target">
+            <option value="mac">Mac（Pages・Mac版Word）</option>
+            <option value="win">Windows（Word）</option>
+            <option value="google">Googleドキュメント</option>
+          </select>
+        </label>
+        <label>ファイル名
+          <input type="text" id="name" value="document">
+        </label>
+      </div>
+      <div><button class="go" id="go">② Wordにしてペッ</button></div>
+      <div class="status" id="status" role="status"></div>
+    </section>
+
+    <section class="panel" aria-label="見本">
+      <div class="label">中身の見本</div>
+      <div class="paper" id="preview"></div>
+      <p class="note">見出し・太字・斜体・下線・リスト・表・リンク・引用・ルビ・埋め込み画像（data:）に対応。CSSの細かい見た目（色・余白・レイアウト）は引き継がれません。</p>
+      <p class="note">Wordファイルには「フォントの名前」しか入らず、形そのものは入りません。開くアプリにそのフォントがないと別のもので代用されるので、いちばんよく開くアプリを選んでください。</p>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const SAMPLE = `<h1>見本：銀の芽ノート</h1>
+<p>これは<strong>サンプル</strong>です。自分のHTMLを左にドロップすると入れ替わります。</p>
+<h2>できること</h2>
+<ul>
+  <li>見出しは Word の「見出し」スタイルになる</li>
+  <li><em>斜体</em>・<u>下線</u>・<s>取り消し線</s>もそのまま</li>
+  <li><a href="https://ginsprout.github.io/tools/">リンク</a>も押せる</li>
+</ul>
+<ol><li>番号つきリスト</li><li>もちろん大丈夫</li></ol>
+<blockquote>引用はちょっと字下げして入ります。</blockquote>
+<p><ruby>紫陽花<rt>あじさい</rt></ruby>の庭——ルビは「紫陽花（あじさい）」の形で残ります。</p>
+<table><tr><th>項目</th><th>メモ</th></tr><tr><td>表</td><td>枠線つきで入る</td></tr></table>`;
+
+/* ---------- HTML → docx 変換のしくみ ---------- */
+const BLOCK = new Set(["P","DIV","SECTION","ARTICLE","MAIN","HEADER","FOOTER","ASIDE","NAV","FIGURE","FIGCAPTION",
+  "H1","H2","H3","H4","H5","H6","UL","OL","LI","BLOCKQUOTE","PRE","HR","TABLE","DL","DT","DD","ADDRESS","CENTER","FORM","DETAILS","SUMMARY"]);
+const SKIP = new Set(["SCRIPT","STYLE","NOSCRIPT","TEMPLATE","HEAD","META","LINK","TITLE","IFRAME","SVG","CANVAS","BUTTON","INPUT","SELECT","TEXTAREA","RP"]);
+
+const FONTS = {
+  mac:    {gothic:"Hiragino Sans",     mincho:"Hiragino Mincho ProN"},
+  win:    {gothic:"Yu Gothic",         mincho:"Yu Mincho"},
+  google: {gothic:"Noto Sans JP",      mincho:"Noto Serif JP"},
+};
+function buildDocx(html, fontKind, target){
+  const D = window.docx;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const root = doc.body;
+  const skipped = {images:0};
+  const fname = (FONTS[target]||FONTS.mac)[fontKind==="gothic"?"gothic":"mincho"];
+  const font = {ascii:fname,hAnsi:fname,eastAsia:fname,cs:fname};
+  const MONO = {ascii:"Consolas",hAnsi:"Consolas",eastAsia:"MS Gothic",cs:"Consolas"};
+  const HEAD = [D.HeadingLevel.HEADING_1,D.HeadingLevel.HEADING_2,D.HeadingLevel.HEADING_3,
+                D.HeadingLevel.HEADING_4,D.HeadingLevel.HEADING_5,D.HeadingLevel.HEADING_6];
+  let olCount = 0;
+
+  function cleanText(t, pre){ return pre ? t : t.replace(/\s+/g," "); }
+
+  function dataImage(src){
+    const m = /^data:image\/(png|jpe?g|gif|bmp);base64,(.+)$/i.exec(src||"");
+    if(!m) return null;
+    const bin = atob(m[2]); const buf = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+    return {buf, type: m[1].toLowerCase().replace("jpeg","jpg")};
+  }
+
+  // 文字の並び（太字などの飾りつき）を集める
+  function inlines(node, fmt, out){
+    for(const n of node.childNodes){
+      if(n.nodeType===3){
+        const t = cleanText(n.nodeValue, fmt.pre);
+        if(!t) continue;
+        if(fmt.pre){
+          t.split("\n").forEach((line,i)=>out.push(new D.TextRun({...runOpts(fmt), text:line, break: i>0?1:undefined})));
+        } else out.push(new D.TextRun({...runOpts(fmt), text:t}));
+        continue;
+      }
+      if(n.nodeType!==1 || SKIP.has(n.tagName)) continue;
+      const tag = n.tagName; const f = {...fmt};
+      if(tag==="BR"){ out.push(new D.TextRun({break:1})); continue; }
+      if(tag==="IMG"){
+        const im = dataImage(n.getAttribute("src"));
+        if(im){
+          let w = parseInt(n.getAttribute("width"))||400, h = parseInt(n.getAttribute("height"))||0;
+          if(!h){ h = Math.round(w*0.66); }
+          if(w>560){ h=Math.round(h*560/w); w=560; }
+          out.push(new D.ImageRun({data:im.buf, type:im.type, transformation:{width:w,height:h}}));
+        } else skipped.images++;
+        continue;
+      }
+      if(tag==="RUBY"){
+        let base="", rt="";
+        for(const c of n.childNodes){
+          if(c.nodeType===1 && c.tagName==="RT") rt+=c.textContent;
+          else if(!(c.nodeType===1 && c.tagName==="RP")) base+=c.textContent;
+        }
+        out.push(new D.TextRun({...runOpts(fmt), text: rt ? `${base}（${rt}）` : base}));
+        continue;
+      }
+      if(/^(B|STRONG)$/.test(tag)) f.bold=true;
+      if(/^(I|EM|CITE|VAR|DFN)$/.test(tag)) f.italics=true;
+      if(/^(U|INS)$/.test(tag)) f.underline=true;
+      if(/^(S|DEL|STRIKE)$/.test(tag)) f.strike=true;
+      if(/^(CODE|KBD|SAMP|TT)$/.test(tag)) f.mono=true;
+      if(tag==="SUP") f.sup=true;
+      if(tag==="SUB") f.sub=true;
+      if(tag==="MARK") f.mark=true;
+      const st = n.getAttribute("style")||"";
+      if(/font-weight\s*:\s*(bold|[6-9]00)/i.test(st)) f.bold=true;
+      if(/font-style\s*:\s*italic/i.test(st)) f.italics=true;
+      if(tag==="A" && n.getAttribute("href") && /^(https?:|mailto:)/i.test(n.getAttribute("href"))){
+        const kids=[]; inlines(n, {...f, link:true}, kids);
+        if(kids.length) out.push(new D.ExternalHyperlink({link:n.getAttribute("href"), children:kids}));
+        continue;
+      }
+      inlines(n, f, out);
+    }
+    return out;
+  }
+  function runOpts(f){
+    const o = {font: f.mono?MONO:font};
+    if(f.bold) o.bold=true; if(f.italics) o.italics=true; if(f.strike) o.strike=true;
+    if(f.underline||f.link) o.underline={};
+    if(f.link) o.color="2F5D8A";
+    if(f.sup) o.superScript=true; if(f.sub) o.subScript=true;
+    if(f.mark) o.highlight="yellow";
+    return o;
+  }
+  function trimRuns(runs){ return runs; }
+
+  function alignOf(el){
+    const st=(el.getAttribute&&el.getAttribute("style"))||""; const a=(el.getAttribute&&el.getAttribute("align"))||"";
+    const m=/text-align\s*:\s*(center|right|justify)/i.exec(st);
+    const v=(m?m[1]:a).toLowerCase();
+    if(el.tagName==="CENTER"||v==="center") return D.AlignmentType.CENTER;
+    if(v==="right") return D.AlignmentType.RIGHT;
+    if(v==="justify") return D.AlignmentType.JUSTIFIED;
+    return undefined;
+  }
+  function hasText(runs){ return runs.length>0; }
+
+  // 段落や見出しなどの「かたまり」を集める
+  function blocks(node, ctx, out){
+    let buffer = [];   // ブロックの間にむき出しで置かれた文字
+    const flush = ()=>{
+      if(!buffer.length) return;
+      const wrapper = document.createElement("span");
+      buffer.forEach(b=>wrapper.appendChild(b.cloneNode(true)));
+      const runs = inlines(wrapper, {pre:ctx.pre}, []);
+      if(runs.length && wrapper.textContent.trim()!=="" || wrapper.querySelector("img"))
+        out.push(new D.Paragraph({children:runs, indent:ctx.indent?{left:ctx.indent}:undefined, alignment:ctx.align}));
+      buffer=[];
+    };
+    for(const n of node.childNodes){
+      if(n.nodeType===3 || (n.nodeType===1 && !BLOCK.has(n.tagName) && !SKIP.has(n.tagName))){ buffer.push(n); continue; }
+      if(n.nodeType!==1 || SKIP.has(n.tagName)) continue;
+      flush();
+      const tag=n.tagName; const align=alignOf(n)??ctx.align;
+      if(/^H[1-6]$/.test(tag)){
+        out.push(new D.Paragraph({heading:HEAD[+tag[1]-1], alignment:align, children:inlines(n,{},[])}));
+      } else if(tag==="UL"||tag==="OL"){
+        list(n, tag==="OL", 0, out);
+      } else if(tag==="BLOCKQUOTE"){
+        blocks(n, {...ctx, indent:(ctx.indent||0)+567, quote:true}, out);
+      } else if(tag==="PRE"){
+        out.push(new D.Paragraph({children:inlines(n,{pre:true,mono:true},[]), shading:{type:D.ShadingType.CLEAR, fill:"F2F2F2", color:"auto"}}));
+      } else if(tag==="HR"){
+        out.push(new D.Paragraph({children:[], border:{bottom:{style:D.BorderStyle.SINGLE,size:6,color:"999999",space:1}}}));
+      } else if(tag==="TABLE"){
+        const t = table(n); if(t) out.push(t, new D.Paragraph({children:[]}));
+      } else if(tag==="DT"){
+        out.push(new D.Paragraph({children:inlines(n,{bold:true},[])}));
+      } else if(tag==="DD"){
+        blocks(n,{...ctx, indent:(ctx.indent||0)+567},out);
+      } else {
+        // P や DIV：中にさらにブロックがあれば潜る、なければ1段落
+        const inner = [...n.children].some(c=>BLOCK.has(c.tagName));
+        if(inner) blocks(n,{...ctx, align}, out);
+        else {
+          const runs=inlines(n,{pre:ctx.pre},[]);
+          if(n.textContent.trim()!=="" || n.querySelector("img"))
+            out.push(new D.Paragraph({children:runs, alignment:align, indent:ctx.indent?{left:ctx.indent}:undefined}));
+        }
+      }
+    }
+    flush();
+    return out;
+  }
+
+  // 番号や「・」は、どのアプリでも同じに出るよう普通の文字として書く
+  const MARKS=["•","◦","▪","•","◦"];
+  function numLabel(n, level){
+    if(level%3===1) return String.fromCharCode(96+((n-1)%26)+1)+".";
+    if(level%3===2) return ["i","ii","iii","iv","v","vi","vii","viii","ix","x","xi","xii"][(n-1)%12]+".";
+    return n+".";
+  }
+  function list(el, ordered, level, out){
+    let n = parseInt(el.getAttribute("start"));
+    if(isNaN(n)){
+      // 項目ごとに <ol> が分かれているHTMLでも、すぐ前の <ol> の続きから数える
+      const prev=el.previousElementSibling;
+      n = (ordered && prev && prev.tagName==="OL" && olEnd.has(prev)) ? olEnd.get(prev) : 1;
+    }
+    const lv=Math.min(level,4);
+    const left=567*(lv+1)+170, hang=420;
+    for(const li of el.children){
+      if(li.tagName!=="LI") continue;
+      const v=parseInt(li.getAttribute("value")); if(!isNaN(v)) n=v;
+      const holder=document.createElement("span");
+      for(const c of li.childNodes){
+        if(c.nodeType===1 && (c.tagName==="UL"||c.tagName==="OL")) continue;
+        holder.appendChild(c.cloneNode(true));
+        if(c.nodeType===1 && /^(P|DIV)$/.test(c.tagName) && c.nextElementSibling && !/^(UL|OL)$/.test(c.nextElementSibling.tagName)) holder.appendChild(document.createElement("br"));
+      }
+      const mark = ordered ? numLabel(n, level) : MARKS[lv];
+      const runs=[new D.TextRun({...runOpts({}), text:mark}), new D.TextRun({...runOpts({}), text:"\t"}), ...inlines(holder,{},[])];
+      out.push(new D.Paragraph({children:runs, indent:{left, hanging:hang}, tabStops:[{type:D.TabStopType.LEFT, position:left}], spacing:{after:60}}));
+      n++;
+      for(const c of li.children){ if(c.tagName==="UL"||c.tagName==="OL") list(c, c.tagName==="OL", level+1, out); }
+    }
+    if(ordered) olEnd.set(el, n);
+  }
+  const olEnd=new WeakMap();
+
+  function table(el){
+    const rows=[...el.querySelectorAll(":scope > tr, :scope > thead > tr, :scope > tbody > tr, :scope > tfoot > tr")];
+    if(!rows.length) return null;
+    const maxCols=Math.max(...rows.map(r=>[...r.children].reduce((s,c)=>s+(parseInt(c.getAttribute("colspan"))||1),0)));
+    const width=9000; const colW=Math.floor(width/maxCols);
+    return new D.Table({
+      width:{size:width, type:D.WidthType.DXA},
+      columnWidths:Array(maxCols).fill(colW),
+      rows:rows.map(r=>new D.TableRow({children:[...r.children].filter(c=>c.tagName==="TD"||c.tagName==="TH").map(c=>{
+        const span=parseInt(c.getAttribute("colspan"))||1;
+        const isTh=c.tagName==="TH";
+        let paras=blocks(c,{},[]);
+        if(isTh) paras=[new D.Paragraph({children:inlines(c,{bold:true},[])})];
+        if(!paras.length) paras=[new D.Paragraph({children:[]})];
+        return new D.TableCell({children:paras, columnSpan:span>1?span:undefined, width:{size:colW*span,type:D.WidthType.DXA},
+          shading:isTh?{type:D.ShadingType.CLEAR, fill:"EEF2EF", color:"auto"}:undefined,
+          margins:{top:60,bottom:60,left:100,right:100}});
+      })}))
+    });
+  }
+
+  const numberingConfigs=[];
+  const children = blocks(root, {}, []);
+  if(!children.length) children.push(new D.Paragraph({children:[]}));
+  const title = (doc.querySelector("title")?.textContent||"").trim();
+
+  const document_ = new D.Document({
+    title: title||undefined,
+    styles:{
+      default:{
+        document:{run:{font, size:21}, paragraph:{spacing:{after:120, line:340}}},
+        heading1:{run:{font, size:36, bold:true}, paragraph:{spacing:{before:360, after:180}}},
+        heading2:{run:{font, size:30, bold:true}, paragraph:{spacing:{before:300, after:150}}},
+        heading3:{run:{font, size:26, bold:true}, paragraph:{spacing:{before:240, after:120}}},
+        heading4:{run:{font, size:23, bold:true}, paragraph:{spacing:{before:200, after:100}}},
+        heading5:{run:{font, size:21, bold:true}},
+        heading6:{run:{font, size:21, bold:true, italics:true}},
+      }
+    },
+    numbering:{config:numberingConfigs},
+    sections:[{properties:{page:{size:{width:11906,height:16838}, margin:{top:1440,bottom:1440,left:1300,right:1300}}}, children}]
+  });
+  return {document:document_, title, skipped};
+}
+/* Word は「フォント指定は書式の先頭に書く」という決まりに厳しく、
+   順番がちがうとフォント指定を読み飛ばしてしまう。できあがった中身を開いて並べ直す。 */
+function fixRunOrder(xml){
+  return xml.replace(/<w:rPr>([\s\S]*?)<\/w:rPr>/g,(all,inner)=>{
+    const style=(inner.match(/<w:rStyle\b[^>]*\/>/)||[""])[0];
+    const fonts=(inner.match(/<w:rFonts\b[^>]*\/>/)||[""])[0];
+    if(!fonts) return all;
+    const rest=inner.replace(style,"").replace(fonts,"");
+    return "<w:rPr>"+style+fonts+rest+"</w:rPr>";
+  });
+}
+async function packFixed(d){
+  const blob=await docx.Packer.toBlob(d);
+  const zip=await JSZip.loadAsync(blob);
+  for(const name of ["word/document.xml","word/styles.xml","word/numbering.xml"]){
+    const f=zip.file(name); if(!f) continue;
+    zip.file(name, fixRunOrder(await f.async("string")));
+  }
+  return zip.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+}
+/* ---------- ここまで変換のしくみ ---------- */
+
+const $ = id=>document.getElementById(id);
+const src=$("src"), preview=$("preview"), status=$("status"), go=$("go"), nameIn=$("name");
+
+function showPreview(html){
+  const d=new DOMParser().parseFromString(html,"text/html");
+  d.querySelectorAll("script,style,link,meta,iframe,object,embed").forEach(e=>e.remove());
+  d.body.querySelectorAll("*").forEach(e=>{[...e.attributes].forEach(a=>{ if(/^on/i.test(a.name)||a.name==="style"&&false) e.removeAttribute(a.name);});
+    if(e.tagName==="IMG" && !/^data:/i.test(e.getAttribute("src")||"")) e.removeAttribute("src");});
+  preview.innerHTML=d.body.innerHTML;
+}
+function say(msg,warn){ status.textContent=msg; status.classList.toggle("warn",!!warn); }
+
+src.addEventListener("input",()=>showPreview(src.value));
+
+function loadFile(f){
+  if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    src.value=r.result; showPreview(r.result);
+    nameIn.value=f.name.replace(/\.(html?)$/i,"")||"document";
+    say(`「${f.name}」を読みこみました。`);
+  };
+  r.onerror=()=>say("ファイルを読めませんでした。もう一度投げてみてください。",true);
+  r.readAsText(f);
+}
+const drop=$("drop"), file=$("file");
+drop.addEventListener("click",()=>file.click());
+drop.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();file.click();}});
+file.addEventListener("change",()=>loadFile(file.files[0]));
+["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>loadFile(e.dataTransfer.files[0]));
+// ページのどこに落としても受けとる
+window.addEventListener("dragover",e=>e.preventDefault());
+window.addEventListener("drop",e=>{e.preventDefault(); if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);});
+
+// 保存のしかた：claude.ai の中なら専用の保存口、ふつうのサイトならブラウザのダウンロード
+let downloadsP = null;
+try{ downloadsP = window.claude?.use ? window.claude.use("downloads") : Promise.resolve(null); }catch(e){ downloadsP=Promise.resolve(null); }
+
+async function saveBlob(blob, filename){
+  const dl = await downloadsP;
+  if(dl){ await dl.save({filename, data:blob}); return; }
+  const url=URL.createObjectURL(blob); const a=document.createElement("a");
+  a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+
+go.addEventListener("click", async ()=>{
+  if(!window.docx||!window.JSZip){ say("変換の部品が読みこめていません。ページを開き直してください。",true); return; }
+  const html=src.value.trim();
+  if(!html){ say("まだ何も入っていません。HTMLを投げ入れてください。",true); return; }
+  go.disabled=true; say("Wordを組み立て中…");
+  try{
+    const {document:d, skipped}=buildDocx(html,$("font").value,$("target").value);
+    const blob=await packFixed(d);
+    const fname=(nameIn.value.trim()||"document").replace(/[\\/:*?"<>|]/g,"_")+".docx";
+    await saveBlob(blob,fname);
+    say(`「${fname}」を出しました。`+(skipped.images?` ※外部URLの画像${skipped.images}枚は入れられませんでした。`:""), !!skipped.images);
+  }catch(e){
+    if(e&&e.code==="declined") say("保存をやめました。");
+    else say("うまく変換できませんでした："+(e&&e.message||e),true);
+  }finally{ go.disabled=false; }
+});
+
+try{ const t=localStorage.getItem("p2w-target"); if(t) $("target").value=t; const f=localStorage.getItem("p2w-font"); if(f) $("font").value=f; }catch(e){}
+["target","font"].forEach(id=>$(id).addEventListener("change",()=>{ try{ localStorage.setItem("p2w-"+id,$(id).value); }catch(e){} }));
+src.value=SAMPLE; showPreview(SAMPLE); nameIn.value="sample";
+</script>
+</body>
+</html>
