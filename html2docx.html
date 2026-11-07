@@ -61,9 +61,14 @@ input[type=text]{min-width:0;width:14em;max-width:100%}
 .filebar #summary:empty{display:none}
 .link{font:inherit;background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer}
 .files{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:200px;overflow:auto}
-.files button{width:100%;display:flex;justify-content:space-between;gap:8px;text-align:left;font:inherit;font-size:.9rem;
+.files li{display:flex;gap:4px}
+.files .pick{flex:1;min-width:0;display:flex;justify-content:space-between;gap:8px;text-align:left;font:inherit;font-size:.9rem;
   color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer}
-.files button[aria-current="true"]{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.files .pick[aria-current="true"]{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.files .rm{flex:none;font:inherit;font-size:1rem;line-height:1;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:0 10px;cursor:pointer}
+.files .rm:hover{color:var(--warn);border-color:var(--warn)}
+.reset{margin-left:auto;font:inherit;font-size:.85rem;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 12px;cursor:pointer}
+.reset:hover{border-color:var(--warn);color:var(--warn)}
 .files .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .files .im{flex:none;color:var(--muted);font-size:.8rem}
 .files .im.miss{color:var(--warn)}
@@ -91,7 +96,7 @@ input[type=text]{min-width:0;width:14em;max-width:100%}
       <div class="filebar">
         <span id="summary"></span>
         <button type="button" class="link" id="pickFolder">フォルダを選ぶ</button>
-        <button type="button" class="link" id="clear" hidden>ぜんぶ外す</button>
+        <button type="button" class="reset" id="clear" hidden>↺ リセット</button>
       </div>
       <ul class="files" id="files" hidden></ul>
       <div class="label" id="srcLabel">または HTML を直接貼りつけ</div>
@@ -554,12 +559,16 @@ function render(){
   real.forEach(doc=>{
     const i = docs.indexOf(doc), {all, miss} = countImages(doc);
     const li = document.createElement("li"), b = document.createElement("button");
-    b.type = "button"; b.setAttribute("aria-current", i===cur ? "true" : "false");
+    b.type = "button"; b.className = "pick"; b.setAttribute("aria-current", i===cur ? "true" : "false");
     const nm = document.createElement("span"); nm.className="nm"; nm.textContent = doc.path;
     const im = document.createElement("span"); im.className = "im"+(miss?" miss":"");
     im.textContent = all ? (miss ? `画像 ${all}枚（${miss}枚見つからない）` : `画像 ${all}枚`) : "";
     b.append(nm, im); b.addEventListener("click",()=>select(i));
-    li.append(b); list.append(li);
+    const x = document.createElement("button");
+    x.type = "button"; x.className = "rm"; x.textContent = "×";
+    x.title = x.ariaLabel = `「${doc.path}」を外す`;
+    x.addEventListener("click",()=>removeDoc(i));
+    li.append(b, x); list.append(li);
   });
   const many = real.length > 1;
   nameLabel.firstChild.textContent = many ? "ZIPの名前" : "ファイル名";
@@ -601,9 +610,20 @@ folder.addEventListener("change",()=>{ addItems([...folder.files].map(f=>({path:
 window.addEventListener("dragover",e=>e.preventDefault());
 window.addEventListener("drop",e=>{ e.preventDefault(); itemsFromDrop(e.dataTransfer).then(addItems); });
 
-clearBtn.addEventListener("click",()=>{
+function removeDoc(i){
+  const gone = docs[i].path;
+  docs.splice(i,1);
+  if(!docs.length){ resetAll(); say(`「${gone}」を外しました。`); return; }
+  if(docs.length===1) nameIn.value = docs[0].name;
+  select(Math.min(cur>i ? cur-1 : cur, docs.length-1));
+  say(`「${gone}」を外しました。`);
+}
+function resetAll(){
   docs = [{name:"sample", path:"sample.html", html:SAMPLE, sample:true}]; res.clear(); byBase.clear();
-  nameIn.value = "sample"; select(0); say("ぜんぶ外しました。");
+  nameIn.value = "sample"; select(0);
+}
+clearBtn.addEventListener("click",()=>{
+  resetAll(); say("リセットしました。投げ入れたファイルと画像はぜんぶ外れています。");
 });
 
 // 保存のしかた：claude.ai の中なら専用の保存口、ふつうのサイトならブラウザのダウンロード
