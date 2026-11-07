@@ -96,7 +96,7 @@ input[type=text]{min-width:0;width:14em;max-width:100%}
       <div class="filebar">
         <span id="summary"></span>
         <button type="button" class="link" id="pickFolder">フォルダを選ぶ</button>
-        <button type="button" class="reset" id="clear" hidden>↺ リセット</button>
+        <button type="button" class="reset" id="clear">↺ リセット</button>
       </div>
       <ul class="files" id="files" hidden></ul>
       <div class="label" id="srcLabel">または HTML を直接貼りつけ</div>
@@ -552,9 +552,8 @@ function say(msg,warn){ status.textContent=msg; status.classList.toggle("warn",!
 
 function render(){
   const real = docs.filter(d=>!d.sample);
-  list.hidden = clearBtn.hidden = real.length===0;
+  list.hidden = real.length===0;
   summary.textContent = real.length ? `HTML ${real.length}件・画像 ${res.size}枚` : (res.size ? `画像 ${res.size}枚（HTMLがまだです）` : "");
-  if(res.size && !real.length) clearBtn.hidden = false;
   list.innerHTML = "";
   real.forEach(doc=>{
     const i = docs.indexOf(doc), {all, miss} = countImages(doc);
