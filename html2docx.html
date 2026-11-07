@@ -57,6 +57,17 @@ input[type=text]{min-width:0;width:14em;max-width:100%}
 .paper td,.paper th{border:1px solid var(--line);padding:4px 8px}
 .paper img{max-width:100%}
 .note{font-size:.85rem;color:var(--muted);margin:0}
+.filebar{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:.85rem;color:var(--muted)}
+.filebar #summary:empty{display:none}
+.link{font:inherit;background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer}
+.files{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:200px;overflow:auto}
+.files button{width:100%;display:flex;justify-content:space-between;gap:8px;text-align:left;font:inherit;font-size:.9rem;
+  color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer}
+.files button[aria-current="true"]{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.files .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.files .im{flex:none;color:var(--muted);font-size:.8rem}
+.files .im.miss{color:var(--warn)}
+.paper img.missing{display:inline-block;min-width:120px;min-height:40px;border:1px dashed var(--warn);color:var(--warn);font-size:.8rem}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -73,10 +84,17 @@ input[type=text]{min-width:0;width:14em;max-width:100%}
       <div class="label">① 投げ入れ口</div>
       <div class="drop" id="drop" tabindex="0" role="button" aria-label="HTMLファイルを選ぶ">
         <strong>ここに .html をドロップ</strong>
-        <span>またはクリックして選ぶ</span>
-        <input type="file" id="file" accept=".html,.htm,text/html" hidden>
+        <span>何枚でも・画像やフォルダ・ZIPもいっしょにOK<br>またはクリックして選ぶ</span>
+        <input type="file" id="file" accept=".html,.htm,text/html,image/*,.zip,application/zip" multiple hidden>
+        <input type="file" id="folder" webkitdirectory multiple hidden>
       </div>
-      <div class="label">または HTML を直接貼りつけ</div>
+      <div class="filebar">
+        <span id="summary"></span>
+        <button type="button" class="link" id="pickFolder">フォルダを選ぶ</button>
+        <button type="button" class="link" id="clear" hidden>ぜんぶ外す</button>
+      </div>
+      <ul class="files" id="files" hidden></ul>
+      <div class="label" id="srcLabel">または HTML を直接貼りつけ</div>
       <textarea id="src" spellcheck="false" aria-label="HTMLソース"></textarea>
 
       <div class="opts">
@@ -104,7 +122,7 @@ input[type=text]{min-width:0;width:14em;max-width:100%}
     <section class="panel" aria-label="見本">
       <div class="label">中身の見本</div>
       <div class="paper" id="preview"></div>
-      <p class="note">見出し・太字・斜体・下線・リスト・表・リンク・引用・ルビ・埋め込み画像（data:）に対応。CSSの細かい見た目（色・余白・レイアウト）は引き継がれません。</p>
+      <p class="note">見出し・太字・斜体・下線・リスト・表・リンク・引用・ルビ・画像に対応。画像はHTMLといっしょに投げ入れてください（フォルダごと・ZIPごとでもOK。NotionのHTML書き出しもそのまま使えます）。ネット上の画像（https://〜）は入りません。CSSの細かい見た目（色・余白・レイアウト）は引き継がれません。</p>
       <p class="note">Wordファイルには「フォントの名前」しか入らず、形そのものは入りません。開くアプリにそのフォントがないと別のもので代用されるので、いちばんよく開くアプリを選んでください。</p>
     </section>
   </div>
@@ -136,7 +154,8 @@ const FONTS = {
   win:    {gothic:"Yu Gothic",         mincho:"Yu Mincho"},
   google: {gothic:"Noto Sans JP",      mincho:"Noto Serif JP"},
 };
-function buildDocx(html, fontKind, target){
+// images: Map( img の src そのまま → {buf, type, w, h} ) … 事前に prepImages で用意しておく
+function buildDocx(html, fontKind, target, images = new Map()){
   const D = window.docx;
   const doc = new DOMParser().parseFromString(html, "text/html");
   const root = doc.body;
@@ -150,13 +169,7 @@ function buildDocx(html, fontKind, target){
 
   function cleanText(t, pre){ return pre ? t : t.replace(/\s+/g," "); }
 
-  function dataImage(src){
-    const m = /^data:image\/(png|jpe?g|gif|bmp);base64,(.+)$/i.exec(src||"");
-    if(!m) return null;
-    const bin = atob(m[2]); const buf = new Uint8Array(bin.length);
-    for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
-    return {buf, type: m[1].toLowerCase().replace("jpeg","jpg")};
-  }
+  const MAXW = 600;   // A4・左右余白ぶんを引いた本文幅（px）
 
   // 文字の並び（太字などの飾りつき）を集める
   function inlines(node, fmt, out){
@@ -173,11 +186,13 @@ function buildDocx(html, fontKind, target){
       const tag = n.tagName; const f = {...fmt};
       if(tag==="BR"){ out.push(new D.TextRun({break:1})); continue; }
       if(tag==="IMG"){
-        const im = dataImage(n.getAttribute("src"));
+        const im = images.get(n.getAttribute("src")||"");
         if(im){
-          let w = parseInt(n.getAttribute("width"))||400, h = parseInt(n.getAttribute("height"))||0;
-          if(!h){ h = Math.round(w*0.66); }
-          if(w>560){ h=Math.round(h*560/w); w=560; }
+          let w = parseInt(n.getAttribute("width"))||0, h = parseInt(n.getAttribute("height"))||0;
+          if(w && !h) h = Math.round(im.h*w/im.w);
+          else if(h && !w) w = Math.round(im.w*h/im.h);
+          else if(!w && !h){ w = im.w; h = im.h; }
+          if(w>MAXW){ h=Math.round(h*MAXW/w); w=MAXW; }
           out.push(new D.ImageRun({data:im.buf, type:im.type, transformation:{width:w,height:h}}));
         } else skipped.images++;
         continue;
@@ -378,45 +393,218 @@ async function packFixed(d){
     const f=zip.file(name); if(!f) continue;
     zip.file(name, fixRunOrder(await f.async("string")));
   }
+  // 画像はぜんぶ「.png」という名前で入ってしまうので、中身に合わせて拡張子を直す（JPEGなどをWordが正しく読めるように）
+  const renamed = {};
+  for(const f of Object.values(zip.files)){
+    if(f.dir || !/^word\/media\/.+\.png$/.test(f.name)) continue;
+    const b = await f.async("uint8array");
+    const ext = b[0]===0xFF&&b[1]===0xD8 ? "jpg" : b[0]===0x47&&b[1]===0x49 ? "gif" : b[0]===0x42&&b[1]===0x4D ? "bmp" : null;
+    if(!ext) continue;
+    const to = f.name.replace(/png$/, ext);
+    zip.remove(f.name); zip.file(to, b);
+    renamed[f.name.slice(5)] = to.slice(5);   // "media/xxx.png" → "media/xxx.jpg"
+  }
+  if(Object.keys(renamed).length){
+    const rels = "word/_rels/document.xml.rels";
+    let x = await zip.file(rels).async("string");
+    for(const [a,b] of Object.entries(renamed)) x = x.split(a).join(b);
+    zip.file(rels, x);
+  }
   return zip.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
 }
 /* ---------- ここまで変換のしくみ ---------- */
 
+/* ---------- 投げ入れたものの置き場 ---------- */
+// docs: 変換するHTML（1件＝Word 1ファイル）。res: いっしょに来た画像（パス → Blob）
+let docs = [], cur = 0;
+const res = new Map(), byBase = new Map();
+const IMG_MIME = {png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",bmp:"image/bmp",webp:"image/webp",svg:"image/svg+xml",avif:"image/avif"};
+const extOf = p => (/\.([a-z0-9]+)$/i.exec(p)||[])[1]?.toLowerCase()||"";
+const isHtml = p => /^(html?|xhtml)$/.test(extOf(p));
+const isZip  = p => extOf(p)==="zip";
+const isImg  = p => extOf(p) in IMG_MIME;
+
+function norm(p){ const out=[]; for(const s of p.split("/")){ if(!s||s===".") continue; if(s==="..") out.pop(); else out.push(s); } return out.join("/"); }
+const dirOf = p => { const i=p.lastIndexOf("/"); return i<0 ? "" : p.slice(0,i+1); };
+
+function addImage(path, blob){
+  const typed = new Blob([blob], {type: IMG_MIME[extOf(path)]});
+  const key = norm(path);
+  res.set(key, typed);
+  const base = key.split("/").pop().toLowerCase();
+  if(!byBase.has(base)) byBase.set(base, typed);
+}
+
+// <img src> からいっしょに来た画像を探す：HTMLの場所からの相対パス → 末尾一致 → ファイル名だけ
+function findRes(src, docPath){
+  let s = (src||"").split(/[?#]/)[0];
+  try{ s = decodeURIComponent(s); }catch(e){}
+  if(!s || /^[a-z][a-z0-9+.-]*:/i.test(s)) return null;
+  const rel = norm(s);
+  const hit = res.get(norm(dirOf(docPath)+s)) || res.get(rel);
+  if(hit) return hit;
+  for(const [k,v] of res) if(k.endsWith("/"+rel)) return v;
+  return byBase.get(rel.split("/").pop().toLowerCase()) || null;
+}
+
+async function ingest(items, prefix=""){   // items: [{path, blob}]
+  let added = 0;
+  for(const {path, blob} of items){
+    const p = prefix + path;
+    if(/(^|\/)(__MACOSX|\.DS_Store)/.test(p)) continue;
+    if(isZip(p)){
+      const zip = await JSZip.loadAsync(blob);
+      const inner = [];
+      for(const f of Object.values(zip.files)) if(!f.dir) inner.push({path:f.name, blob: await f.async("blob")});
+      added += await ingest(inner, dirOf(p));
+    } else if(isHtml(p)){
+      docs.push({name: p.split("/").pop().replace(/\.x?html?$/i,""), path: p, html: await blob.text()});
+      added++;
+    } else if(isImg(p)){
+      addImage(p, blob);
+    }
+  }
+  return added;
+}
+
+// フォルダごとドロップされたときに中身をたどる
+async function walk(entry){
+  if(entry.isFile) return [{path: entry.fullPath.replace(/^\//,""), blob: await new Promise((ok,ng)=>entry.file(ok,ng))}];
+  const reader = entry.createReader(), all = [];
+  for(;;){ const b = await new Promise((ok,ng)=>reader.readEntries(ok,ng)); if(!b.length) break; all.push(...b); }
+  return (await Promise.all(all.map(walk))).flat();
+}
+function itemsFromDrop(dt){
+  const entries = [...(dt.items||[])].map(i=>i.webkitGetAsEntry?.()).filter(Boolean);  // ここは同期で取らないと消える
+  if(!entries.length) return Promise.resolve([...dt.files].map(f=>({path:f.name, blob:f})));
+  return Promise.all(entries.map(walk)).then(a=>a.flat());
+}
+
+/* ---------- 画像を Word に入れられる形にする ---------- */
+async function loadImage(blob){
+  const url = URL.createObjectURL(blob);
+  try{
+    const img = new Image(); img.src = url; await img.decode();
+    let w = img.naturalWidth || 300, h = img.naturalHeight || 150;
+    const t = blob.type;
+    if(/^image\/(png|jpeg|gif|bmp)$/.test(t))
+      return {buf: new Uint8Array(await blob.arrayBuffer()), type: t==="image/jpeg"?"jpg":t.slice(6), w, h};
+    // WebP・SVG などは Word が苦手なので PNG に描き直す
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    c.getContext("2d").drawImage(img, 0, 0, w, h);
+    const png = await new Promise(ok=>c.toBlob(ok, "image/png"));
+    return {buf: new Uint8Array(await png.arrayBuffer()), type: "png", w, h};
+  } finally { URL.revokeObjectURL(url); }
+}
+async function blobForSrc(src, docPath){
+  if(/^data:image\//i.test(src)){ try{ return await (await fetch(src)).blob(); }catch(e){ return null; } }
+  return findRes(src, docPath);
+}
+async function prepImages(doc){
+  const d = new DOMParser().parseFromString(doc.html, "text/html");
+  const map = new Map();
+  for(const img of d.querySelectorAll("img")){
+    const src = img.getAttribute("src")||"";
+    if(map.has(src)) continue;
+    const blob = await blobForSrc(src, doc.path);
+    let im = null;
+    if(blob){ try{ im = await loadImage(blob); }catch(e){} }
+    map.set(src, im);
+  }
+  return map;
+}
+// 一覧に出す「画像 n枚（m枚見つからない）」用
+function countImages(doc){
+  const d = new DOMParser().parseFromString(doc.html, "text/html");
+  let all = 0, miss = 0;
+  d.querySelectorAll("img").forEach(i=>{ all++; const s=i.getAttribute("src")||""; if(!/^data:image\//i.test(s) && !findRes(s, doc.path)) miss++; });
+  return {all, miss};
+}
+
+/* ---------- 画面 ---------- */
 const $ = id=>document.getElementById(id);
 const src=$("src"), preview=$("preview"), status=$("status"), go=$("go"), nameIn=$("name");
+const list=$("files"), summary=$("summary"), clearBtn=$("clear"), nameLabel=nameIn.parentElement;
+let previewUrls = [];
 
-function showPreview(html){
-  const d=new DOMParser().parseFromString(html,"text/html");
+function showPreview(doc){
+  previewUrls.forEach(u=>URL.revokeObjectURL(u)); previewUrls = [];
+  const d=new DOMParser().parseFromString(doc.html,"text/html");
   d.querySelectorAll("script,style,link,meta,iframe,object,embed").forEach(e=>e.remove());
-  d.body.querySelectorAll("*").forEach(e=>{[...e.attributes].forEach(a=>{ if(/^on/i.test(a.name)||a.name==="style"&&false) e.removeAttribute(a.name);});
-    if(e.tagName==="IMG" && !/^data:/i.test(e.getAttribute("src")||"")) e.removeAttribute("src");});
+  d.body.querySelectorAll("*").forEach(e=>{
+    [...e.attributes].forEach(a=>{ if(/^on/i.test(a.name)) e.removeAttribute(a.name); });
+    if(e.tagName==="IMG"){
+      const s=e.getAttribute("src")||"";
+      if(/^data:image\//i.test(s)) return;
+      const b=findRes(s, doc.path);
+      if(b){ const u=URL.createObjectURL(b); previewUrls.push(u); e.setAttribute("src",u); }
+      else { e.removeAttribute("src"); e.classList.add("missing"); e.setAttribute("alt","画像が見つかりません："+(s.split("/").pop()||"?")); }
+    }
+  });
   preview.innerHTML=d.body.innerHTML;
 }
 function say(msg,warn){ status.textContent=msg; status.classList.toggle("warn",!!warn); }
 
-src.addEventListener("input",()=>showPreview(src.value));
-
-function loadFile(f){
-  if(!f) return;
-  const r=new FileReader();
-  r.onload=()=>{
-    src.value=r.result; showPreview(r.result);
-    nameIn.value=f.name.replace(/\.(html?)$/i,"")||"document";
-    say(`「${f.name}」を読みこみました。`);
-  };
-  r.onerror=()=>say("ファイルを読めませんでした。もう一度投げてみてください。",true);
-  r.readAsText(f);
+function render(){
+  const real = docs.filter(d=>!d.sample);
+  list.hidden = clearBtn.hidden = real.length===0;
+  summary.textContent = real.length ? `HTML ${real.length}件・画像 ${res.size}枚` : (res.size ? `画像 ${res.size}枚（HTMLがまだです）` : "");
+  if(res.size && !real.length) clearBtn.hidden = false;
+  list.innerHTML = "";
+  real.forEach(doc=>{
+    const i = docs.indexOf(doc), {all, miss} = countImages(doc);
+    const li = document.createElement("li"), b = document.createElement("button");
+    b.type = "button"; b.setAttribute("aria-current", i===cur ? "true" : "false");
+    const nm = document.createElement("span"); nm.className="nm"; nm.textContent = doc.path;
+    const im = document.createElement("span"); im.className = "im"+(miss?" miss":"");
+    im.textContent = all ? (miss ? `画像 ${all}枚（${miss}枚見つからない）` : `画像 ${all}枚`) : "";
+    b.append(nm, im); b.addEventListener("click",()=>select(i));
+    li.append(b); list.append(li);
+  });
+  const many = real.length > 1;
+  nameLabel.firstChild.textContent = many ? "ZIPの名前" : "ファイル名";
+  go.textContent = many ? `② ${real.length}件ぜんぶWordにしてペッ` : "② Wordにしてペッ";
+  $("srcLabel").textContent = real.length ? "えらんでいるHTMLの中身（直してもOK）" : "または HTML を直接貼りつけ";
 }
-const drop=$("drop"), file=$("file");
+function select(i){
+  cur = i; src.value = docs[i].html; showPreview(docs[i]);
+  if(docs.filter(d=>!d.sample).length<=1) nameIn.value = docs[i].name;
+  render();
+}
+
+async function addItems(items){
+  if(!items.length) return;
+  say("読みこみ中…");
+  try{
+    const before = docs.length;
+    const added = await ingest(items);
+    if(added){ docs = docs.filter(d=>!d.sample); }
+    const first = added ? docs.length - added : -1;
+    if(!docs.length){ render(); say(res.size ? "画像を受けとりました。つづけてHTMLも投げ入れてください。" : "HTML・画像・ZIPが見つかりませんでした。", !res.size); return; }
+    if(docs.filter(d=>!d.sample).length>1 && before<=1) nameIn.value = "word-files";
+    select(first>=0 ? first : cur);
+    say(added ? `HTML ${added}件を読みこみました。` : "画像を追加しました。");
+  }catch(e){ say("読みこめませんでした："+(e&&e.message||e), true); }
+}
+
+src.addEventListener("input",()=>{ docs[cur].html = src.value; showPreview(docs[cur]); });
+
+const drop=$("drop"), file=$("file"), folder=$("folder");
 drop.addEventListener("click",()=>file.click());
 drop.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();file.click();}});
-file.addEventListener("change",()=>loadFile(file.files[0]));
+$("pickFolder").addEventListener("click",()=>folder.click());
+file.addEventListener("change",()=>{ addItems([...file.files].map(f=>({path:f.name, blob:f}))); file.value=""; });
+folder.addEventListener("change",()=>{ addItems([...folder.files].map(f=>({path:f.webkitRelativePath||f.name, blob:f}))); folder.value=""; });
 ["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over");}));
 ["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over");}));
-drop.addEventListener("drop",e=>loadFile(e.dataTransfer.files[0]));
 // ページのどこに落としても受けとる
 window.addEventListener("dragover",e=>e.preventDefault());
-window.addEventListener("drop",e=>{e.preventDefault(); if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);});
+window.addEventListener("drop",e=>{ e.preventDefault(); itemsFromDrop(e.dataTransfer).then(addItems); });
+
+clearBtn.addEventListener("click",()=>{
+  docs = [{name:"sample", path:"sample.html", html:SAMPLE, sample:true}]; res.clear(); byBase.clear();
+  nameIn.value = "sample"; select(0); say("ぜんぶ外しました。");
+});
 
 // 保存のしかた：claude.ai の中なら専用の保存口、ふつうのサイトならブラウザのダウンロード
 let downloadsP = null;
@@ -429,18 +617,37 @@ async function saveBlob(blob, filename){
   a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
+const safeName = s => (s.trim()||"document").replace(/[\\/:*?"<>|]/g,"_");
 
 go.addEventListener("click", async ()=>{
   if(!window.docx||!window.JSZip){ say("変換の部品が読みこめていません。ページを開き直してください。",true); return; }
-  const html=src.value.trim();
-  if(!html){ say("まだ何も入っていません。HTMLを投げ入れてください。",true); return; }
-  go.disabled=true; say("Wordを組み立て中…");
+  const real = docs.filter(d=>!d.sample);
+  const todo = real.length ? real : docs;
+  if(!todo.some(d=>d.html.trim())){ say("まだ何も入っていません。HTMLを投げ入れてください。",true); return; }
+  go.disabled=true;
   try{
-    const {document:d, skipped}=buildDocx(html,$("font").value,$("target").value);
-    const blob=await packFixed(d);
-    const fname=(nameIn.value.trim()||"document").replace(/[\\/:*?"<>|]/g,"_")+".docx";
-    await saveBlob(blob,fname);
-    say(`「${fname}」を出しました。`+(skipped.images?` ※外部URLの画像${skipped.images}枚は入れられませんでした。`:""), !!skipped.images);
+    const out=[]; let missing=0;
+    for(const [i,doc] of todo.entries()){
+      if(!doc.html.trim()) continue;
+      say(todo.length>1 ? `Wordを組み立て中…（${i+1}/${todo.length}）` : "Wordを組み立て中…");
+      const images = await prepImages(doc);
+      const {document:d, skipped} = buildDocx(doc.html, $("font").value, $("target").value, images);
+      out.push({name: safeName(todo.length>1 ? doc.name : nameIn.value), blob: await packFixed(d)});
+      missing += skipped.images;
+    }
+    let fname;
+    if(out.length===1){ fname = out[0].name+".docx"; await saveBlob(out[0].blob, fname); }
+    else {
+      const zip = new JSZip(), used = new Set();
+      for(const o of out){
+        let n = o.name, k = 2; while(used.has(n)) n = `${o.name}_${k++}`;
+        used.add(n); zip.file(n+".docx", o.blob);
+      }
+      fname = safeName(nameIn.value)+".zip";
+      await saveBlob(await zip.generateAsync({type:"blob"}), fname);
+    }
+    say(`「${fname}」を出しました。`+(out.length>1?`（Word ${out.length}件入り）`:"")
+      +(missing?` ※見つからなかった画像${missing}枚は入っていません。HTMLといっしょに画像も投げ入れてください。`:""), !!missing);
   }catch(e){
     if(e&&e.code==="declined") say("保存をやめました。");
     else say("うまく変換できませんでした："+(e&&e.message||e),true);
@@ -449,7 +656,8 @@ go.addEventListener("click", async ()=>{
 
 try{ const t=localStorage.getItem("p2w-target"); if(t) $("target").value=t; const f=localStorage.getItem("p2w-font"); if(f) $("font").value=f; }catch(e){}
 ["target","font"].forEach(id=>$(id).addEventListener("change",()=>{ try{ localStorage.setItem("p2w-"+id,$(id).value); }catch(e){} }));
-src.value=SAMPLE; showPreview(SAMPLE); nameIn.value="sample";
+docs = [{name:"sample", path:"sample.html", html:SAMPLE, sample:true}];
+nameIn.value="sample"; select(0);
 </script>
 </body>
 </html>
