@@ -90,7 +90,7 @@ input[type=text]{min-width:0;width:14em;max-width:100%}
       <div class="drop" id="drop" tabindex="0" role="button" aria-label="HTMLファイルを選ぶ">
         <strong>ここに .html をドロップ</strong>
         <span>何枚でも・画像やフォルダ・ZIPもいっしょにOK<br>またはクリックして選ぶ</span>
-        <input type="file" id="file" accept=".html,.htm,text/html,image/*,.zip,application/zip" multiple hidden>
+        <input type="file" id="file" accept=".html,.htm,text/html,image/*,.zip,application/zip,.csv,text/csv" multiple hidden>
         <input type="file" id="folder" webkitdirectory multiple hidden>
       </div>
       <div class="filebar">
@@ -127,7 +127,7 @@ input[type=text]{min-width:0;width:14em;max-width:100%}
     <section class="panel" aria-label="見本">
       <div class="label">中身の見本</div>
       <div class="paper" id="preview"></div>
-      <p class="note">見出し・太字・斜体・下線・リスト・表・リンク・引用・ルビ・画像に対応。画像はHTMLといっしょに投げ入れてください（フォルダごと・ZIPごとでもOK。NotionのHTML書き出しもそのまま使えます）。ネット上の画像（https://〜）は入りません。CSSの細かい見た目（色・余白・レイアウト）は引き継がれません。</p>
+      <p class="note">見出し・太字・斜体・下線・リスト・表・リンク・引用・ルビ・画像に対応。画像はHTMLといっしょに投げ入れてください（フォルダごと・ZIPごとでもOK。NotionのHTML書き出しもそのまま使えます）。ネット上の画像（https://〜）は入りません。Notionのデータベース（CSVへのリンク）は、CSVもいっしょに投げ入れればWordの表になります。CSSの細かい見た目（色・余白・レイアウト）は引き継がれません。</p>
       <p class="note">Wordファイルには「フォントの名前」しか入らず、形そのものは入りません。開くアプリにそのフォントがないと別のもので代用されるので、いちばんよく開くアプリを選んでください。</p>
     </section>
   </div>
@@ -423,11 +423,13 @@ async function packFixed(d){
 // docs: 変換するHTML（1件＝Word 1ファイル）。res: いっしょに来た画像（パス → Blob）
 let docs = [], cur = 0;
 const res = new Map(), byBase = new Map();
+const csvRes = new Map(), csvBase = new Map();   // CSV（Notionのデータベース書き出しなど）：パス → 文字列
 const IMG_MIME = {png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",bmp:"image/bmp",webp:"image/webp",svg:"image/svg+xml",avif:"image/avif"};
 const extOf = p => (/\.([a-z0-9]+)$/i.exec(p)||[])[1]?.toLowerCase()||"";
 const isHtml = p => /^(html?|xhtml)$/.test(extOf(p));
 const isZip  = p => extOf(p)==="zip";
 const isImg  = p => extOf(p) in IMG_MIME;
+const isCsv  = p => extOf(p)==="csv";
 
 function norm(p){ const out=[]; for(const s of p.split("/")){ if(!s||s===".") continue; if(s==="..") out.pop(); else out.push(s); } return out.join("/"); }
 const dirOf = p => { const i=p.lastIndexOf("/"); return i<0 ? "" : p.slice(0,i+1); };
@@ -441,15 +443,75 @@ function addImage(path, blob){
 }
 
 // <img src> からいっしょに来た画像を探す：HTMLの場所からの相対パス → 末尾一致 → ファイル名だけ
-function findRes(src, docPath){
+function findIn(map, base, src, docPath){
   let s = (src||"").split(/[?#]/)[0];
   try{ s = decodeURIComponent(s); }catch(e){}
   if(!s || /^[a-z][a-z0-9+.-]*:/i.test(s)) return null;
   const rel = norm(s);
-  const hit = res.get(norm(dirOf(docPath)+s)) || res.get(rel);
-  if(hit) return hit;
-  for(const [k,v] of res) if(k.endsWith("/"+rel)) return v;
-  return byBase.get(rel.split("/").pop().toLowerCase()) || null;
+  for(const k of [norm(dirOf(docPath)+s), rel]) if(map.has(k)) return map.get(k);
+  for(const [k,v] of map) if(k.endsWith("/"+rel)) return v;
+  const b = rel.split("/").pop().toLowerCase();
+  return base.has(b) ? base.get(b) : null;
+}
+const findRes = (src, docPath) => findIn(res, byBase, src, docPath);
+const findCsv = (href, docPath) => findIn(csvRes, csvBase, href, docPath);
+
+/* ---------- CSV → 表 ---------- */
+function parseCsv(text){
+  text = text.replace(/^\uFEFF/, "");
+  const rows = []; let row = [], cell = "", q = false;
+  for(let i=0; i<text.length; i++){
+    const c = text[i];
+    if(q){
+      if(c==='"'){ if(text[i+1]==='"'){ cell+='"'; i++; } else q = false; }
+      else cell += c;
+    } else if(c==='"') q = true;
+    else if(c===','){ row.push(cell); cell=""; }
+    else if(c==='\n' || c==='\r'){
+      if(c==='\r' && text[i+1]==='\n') i++;
+      row.push(cell); rows.push(row); row=[]; cell="";
+    } else cell += c;
+  }
+  if(cell!=="" || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r=>r.some(v=>v.trim()!==""));
+}
+function csvTable(d, text){
+  const rows = parseCsv(text), t = d.createElement("table");
+  rows.forEach((r,i)=>{
+    const tr = d.createElement("tr");
+    r.forEach(v=>{
+      const c = d.createElement(i===0?"th":"td");
+      v.split(/\r?\n/).forEach((line,k)=>{ if(k) c.append(d.createElement("br")); c.append(line); });
+      tr.append(c);
+    });
+    t.append(tr);
+  });
+  return t;
+}
+const isCsvLink = a => /\.csv([?#]|$)/i.test(a.getAttribute("href")||"");
+// HTML の中の「○○.csv へのリンク」を、いっしょに来たCSVの中身で本物の表に置きかえる
+function expandCsv(html, docPath){
+  if(!csvRes.size || !/\.csv/i.test(html)) return html;
+  const d = new DOMParser().parseFromString(html, "text/html");
+  let n = 0;
+  d.querySelectorAll("a[href]").forEach(a=>{
+    if(!isCsvLink(a)) return;
+    const text = findCsv(a.getAttribute("href"), docPath);
+    if(text==null) return;
+    const table = csvTable(d, text), label = a.textContent.trim();
+    // リンクだけが入っているかたまり（figure や p）ごと「表題＋表」に入れかえる
+    let blk = a;
+    while(blk.parentElement && blk.parentElement!==d.body && blk.parentElement.textContent.trim()===label) blk = blk.parentElement;
+    if(blk.textContent.trim()===label && blk.parentElement){
+      const cap = d.createElement("p"), b = d.createElement("strong");
+      b.textContent = label; cap.append(b);
+      blk.replaceWith(cap, table);
+    } else {
+      (a.closest("p,li,div,figure,td")||a).after(table);
+    }
+    n++;
+  });
+  return n ? d.documentElement.outerHTML : html;
 }
 
 async function ingest(items, prefix=""){   // items: [{path, blob}]
@@ -467,6 +529,11 @@ async function ingest(items, prefix=""){   // items: [{path, blob}]
       added++;
     } else if(isImg(p)){
       addImage(p, blob);
+    } else if(isCsv(p)){
+      const key = norm(p), text = await blob.text();
+      csvRes.set(key, text);
+      const base = key.split("/").pop().toLowerCase();
+      if(!csvBase.has(base)) csvBase.set(base, text);
     }
   }
   return added;
@@ -523,7 +590,9 @@ function countImages(doc){
   const d = new DOMParser().parseFromString(doc.html, "text/html");
   let all = 0, miss = 0;
   d.querySelectorAll("img").forEach(i=>{ all++; const s=i.getAttribute("src")||""; if(!/^data:image\//i.test(s) && !findRes(s, doc.path)) miss++; });
-  return {all, miss};
+  let tables = 0, tmiss = 0;
+  d.querySelectorAll("a[href]").forEach(a=>{ if(!isCsvLink(a)) return; tables++; if(findCsv(a.getAttribute("href"), doc.path)==null) tmiss++; });
+  return {all, miss, tables, tmiss};
 }
 
 /* ---------- 画面 ---------- */
@@ -534,7 +603,7 @@ let previewUrls = [];
 
 function showPreview(doc){
   previewUrls.forEach(u=>URL.revokeObjectURL(u)); previewUrls = [];
-  const d=new DOMParser().parseFromString(doc.html,"text/html");
+  const d=new DOMParser().parseFromString(expandCsv(doc.html, doc.path),"text/html");
   d.querySelectorAll("script,style,link,meta,iframe,object,embed").forEach(e=>e.remove());
   d.body.querySelectorAll("*").forEach(e=>{
     [...e.attributes].forEach(a=>{ if(/^on/i.test(a.name)) e.removeAttribute(a.name); });
@@ -553,15 +622,20 @@ function say(msg,warn){ status.textContent=msg; status.classList.toggle("warn",!
 function render(){
   const real = docs.filter(d=>!d.sample);
   list.hidden = real.length===0;
-  summary.textContent = real.length ? `HTML ${real.length}件・画像 ${res.size}枚` : (res.size ? `画像 ${res.size}枚（HTMLがまだです）` : "");
+  const extra = `画像 ${res.size}枚` + (csvRes.size ? `・CSV ${csvRes.size}件` : "");
+  summary.textContent = real.length ? `HTML ${real.length}件・${extra}` : (res.size||csvRes.size ? `${extra}（HTMLがまだです）` : "");
   list.innerHTML = "";
   real.forEach(doc=>{
-    const i = docs.indexOf(doc), {all, miss} = countImages(doc);
+    const i = docs.indexOf(doc), {all, miss, tables, tmiss} = countImages(doc);
     const li = document.createElement("li"), b = document.createElement("button");
     b.type = "button"; b.className = "pick"; b.setAttribute("aria-current", i===cur ? "true" : "false");
     const nm = document.createElement("span"); nm.className="nm"; nm.textContent = doc.path;
     const im = document.createElement("span"); im.className = "im"+(miss?" miss":"");
-    im.textContent = all ? (miss ? `画像 ${all}枚（${miss}枚見つからない）` : `画像 ${all}枚`) : "";
+    im.textContent = [
+      all ? (miss ? `画像 ${all}枚（${miss}枚見つからない）` : `画像 ${all}枚`) : "",
+      tables ? (tmiss ? `表 ${tables}件（${tmiss}件CSVなし）` : `表 ${tables}件`) : ""
+    ].filter(Boolean).join("・");
+    if(tmiss) im.classList.add("miss");
     b.append(nm, im); b.addEventListener("click",()=>select(i));
     const x = document.createElement("button");
     x.type = "button"; x.className = "rm"; x.textContent = "×";
@@ -588,10 +662,10 @@ async function addItems(items){
     const added = await ingest(items);
     if(added){ docs = docs.filter(d=>!d.sample); }
     const first = added ? docs.length - added : -1;
-    if(!docs.length){ render(); say(res.size ? "画像を受けとりました。つづけてHTMLも投げ入れてください。" : "HTML・画像・ZIPが見つかりませんでした。", !res.size); return; }
+    if(!docs.length){ render(); say(res.size||csvRes.size ? "画像・CSVを受けとりました。つづけてHTMLも投げ入れてください。" : "HTML・画像・CSV・ZIPが見つかりませんでした。", !(res.size||csvRes.size)); return; }
     if(docs.filter(d=>!d.sample).length>1 && before<=1) nameIn.value = "word-files";
     select(first>=0 ? first : cur);
-    say(added ? `HTML ${added}件を読みこみました。` : "画像を追加しました。");
+    say(added ? `HTML ${added}件を読みこみました。` : "画像・CSVを追加しました。");
   }catch(e){ say("読みこめませんでした："+(e&&e.message||e), true); }
 }
 
@@ -618,7 +692,7 @@ function removeDoc(i){
   say(`「${gone}」を外しました。`);
 }
 function resetAll(){
-  docs = [{name:"sample", path:"sample.html", html:SAMPLE, sample:true}]; res.clear(); byBase.clear();
+  docs = [{name:"sample", path:"sample.html", html:SAMPLE, sample:true}]; res.clear(); byBase.clear(); csvRes.clear(); csvBase.clear();
   nameIn.value = "sample"; select(0);
 }
 clearBtn.addEventListener("click",()=>{
@@ -650,7 +724,7 @@ go.addEventListener("click", async ()=>{
       if(!doc.html.trim()) continue;
       say(todo.length>1 ? `Wordを組み立て中…（${i+1}/${todo.length}）` : "Wordを組み立て中…");
       const images = await prepImages(doc);
-      const {document:d, skipped} = buildDocx(doc.html, $("font").value, $("target").value, images);
+      const {document:d, skipped} = buildDocx(expandCsv(doc.html, doc.path), $("font").value, $("target").value, images);
       out.push({name: safeName(todo.length>1 ? doc.name : nameIn.value), blob: await packFixed(d)});
       missing += skipped.images;
     }
