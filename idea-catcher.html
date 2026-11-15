@@ -359,23 +359,28 @@
     font-family: 'DM Mono', monospace;
   }
   .archive-btns {
-    grid-row: 1;
+    grid-row: 1 / span 4;
     grid-column: 2;
     display: flex;
     flex-direction: column;
     gap: 6px;
     align-items: flex-end;
   }
-  .btn-del, .btn-edit {
+  .archive-title { grid-column: 1; }
+  .btn-del, .btn-edit, .btn-comment {
     background: none;
     border: none;
     cursor: pointer;
     font-size: .75rem;
-    padding: 0;
+    padding: 4px 0;
+    min-height: 28px;
     line-height: 1;
-    transition: color .2s;
+    transition: color .2s, border-color .2s;
     font-family: 'DM Mono', monospace;
+    white-space: nowrap;
   }
+  .btn-comment { color: #5f7f80; }
+  .btn-comment:hover { color: var(--gold); }
   .btn-del  { color: #3a3550; }
   .btn-del:hover  { color: #8a6060; }
   .btn-edit { color: #3a4a5a; }
@@ -579,6 +584,98 @@
     margin-right: 6px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── コメントの切り口 ── */
+  #ai-card { scroll-margin-top: 72px; }
+  .card-actions { flex-wrap: wrap; }
+  .angle-section { margin-top: 20px; }
+  .angle-label {
+    font-size: .6rem;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--ghost);
+    margin-bottom: 8px;
+  }
+  .angle-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .angle-chip {
+    background: none;
+    border: 1px solid var(--paper-dim);
+    color: #5a5248;
+    padding: 6px 14px;
+    min-height: 36px;
+    border-radius: 18px;
+    font-family: 'Noto Serif JP', serif;
+    font-size: .75rem;
+    cursor: pointer;
+    transition: border-color .2s, color .2s, background .2s;
+  }
+  .angle-chip:hover { border-color: var(--teal); color: var(--teal-dim); }
+  .angle-chip.active { background: var(--teal); border-color: var(--teal); color: #f0ece4; }
+
+  /* ── タグの絞り込み ── */
+  .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .filter-bar:empty { display: none; }
+  .filter-chip, .modal-genre {
+    background: none;
+    border: 1px solid #3a3550;
+    color: var(--ghost);
+    padding: 6px 14px;
+    min-height: 36px;
+    border-radius: 18px;
+    font-family: 'Noto Serif JP', serif;
+    font-size: .75rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color .2s, color .2s, background .2s;
+  }
+  .filter-chip .count { font-family: 'DM Mono', monospace; font-size: .68rem; color: #5a5470; }
+  .filter-chip:hover, .modal-genre:hover { border-color: var(--teal); color: var(--paper-dim); }
+  .filter-chip.active, .modal-genre.active { background: var(--teal); border-color: var(--teal); color: #f0ece4; }
+  .filter-chip.active .count { color: #d8ecec; }
+
+  .bulk-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+  .bulk-row:empty { display: none; }
+  .bulk-progress { font-size: .75rem; color: var(--ghost); line-height: 1.6; }
+  .btn-backup:disabled { opacity: .5; cursor: default; }
+
+  .archive-empty {
+    padding: 18px;
+    border: 1px dashed #3a3550;
+    border-radius: 3px;
+    font-size: .8rem;
+    color: var(--ghost);
+    text-align: center;
+  }
+
+  .modal-genres { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* ── スマホ：指で押しやすく ── */
+  @media (max-width: 600px) {
+    #ai-card { padding: 24px 20px 22px; }
+    .btn-ghost, .btn-backup, .filter-chip, .angle-chip, .modal-genre { min-height: 44px; }
+    .btn-ghost { flex: 1 1 auto; }
+    .backup-actions { flex-wrap: wrap; }
+    .archive-item { grid-template-columns: 1fr; }
+    .archive-btns {
+      grid-column: 1;
+      grid-row: auto;
+      flex-direction: row;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .btn-del, .btn-edit, .btn-comment {
+      min-height: 44px;
+      padding: 0 14px;
+      border: 1px solid #3a3550;
+      border-radius: 2px;
+    }
+    .btn-edit { color: #7a8a9a; }
+    .btn-del  { color: #8a7070; }
+  }
 </style>
 </head>
 <body>
@@ -592,15 +689,19 @@
 
 <!-- AIピックアップカード -->
 <div id="ai-card" style="display:none">
-  <div class="card-eyebrow">Today's pickup — AI selected</div>
+  <div class="card-eyebrow" id="card-eyebrow">Today's pickup — AI selected</div>
   <div class="card-idea-title" id="card-title"></div>
   <div class="card-idea-memo" id="card-memo"></div>
   <hr class="card-divider">
-  <div class="ai-label">AI comment</div>
+  <div class="ai-label" id="ai-label">AI comment</div>
   <div id="ai-comment"></div>
   <div class="card-meta">
     <span id="card-date"></span>
     <span id="card-tags"></span>
+  </div>
+  <div class="angle-section">
+    <div class="angle-label">コメントの切り口</div>
+    <div class="angle-chips" id="angle-chips" role="group" aria-label="コメントの切り口"></div>
   </div>
   <div class="card-actions">
     <button class="btn-ghost" onclick="pickRandom()">▶ 別のアイデアを見る</button>
@@ -617,7 +718,7 @@
   <div class="section-label">New Idea</div>
   <input id="inp-title" class="input-title" type="text" placeholder="アイデアのタイトル">
   <textarea id="inp-memo" class="input-memo" placeholder="メモ（任意）"></textarea>
-  <input id="inp-tag" class="input-tag" type="text" placeholder="タグ：スペース区切り（任意） 例: ツール 小説 デザイン">
+  <input id="inp-tag" class="input-tag" type="text" placeholder="タグ：スペース区切り（任意）※保存するとAIがジャンルも自動でつけます">
   <button class="btn-save" onclick="saveIdea()">✦ 保存する</button>
 </div>
 
@@ -636,6 +737,8 @@
       <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importIdeas(event)">
     </div>
   </div>
+  <div class="filter-bar" id="filter-bar" role="group" aria-label="タグで絞り込む"></div>
+  <div class="bulk-row" id="bulk-row"></div>
   <div id="archive-list"></div>
 </div>
 
@@ -649,6 +752,8 @@
     <input id="edit-title" class="modal-title-input" type="text" placeholder="タイトル">
     <textarea id="edit-memo" class="modal-memo-input" placeholder="メモ（任意）"></textarea>
     <input id="edit-tag" class="modal-tag-input" type="text" placeholder="タグ：スペース区切り">
+    <div class="modal-label" style="margin-top:4px">ジャンル（タップでつけ外し）</div>
+    <div class="modal-genres" id="edit-genres"></div>
     <div class="modal-actions">
       <button class="btn-modal-save" onclick="saveEdit()">✦ 保存する</button>
       <button class="btn-modal-cancel" onclick="closeModal()">キャンセル</button>
@@ -660,6 +765,15 @@
 
 <script>
 const STORAGE_KEY = 'ginsprout_ideas_v1';
+
+/* ── 設定：ジャンル候補 ──
+   AIの自動タグ付けは、ここにある言葉だけを使います。増やす・減らす・名前を変えるときはここだけ直せばOK。
+   タグはスペース区切りで入力するので、名前にスペースは入れないでください。 */
+const GENRES = ['小説', 'ツール', 'デザイン', '発達支援', '絵本', 'note・エッセイ', '仕事・ビジネス', 'その他'];
+
+/* ── 設定：AIプロキシ ── */
+const AI_PROXY_URL = 'https://ginsprout-proxy.yumco-taka.workers.dev/';
+const AI_MODEL     = 'claude-sonnet-4-6';
 
 function loadIdeas() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
@@ -918,24 +1032,136 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2200);
 }
 
+/* ── タグの小道具 ── */
+const UNTAGGED = '__untagged__'; // 絞り込み「未分類」の目印
+function tagsOf(idea) { return Array.isArray(idea.tags) ? idea.tags : []; }
+function parseTagInput(raw) { return raw.trim() ? raw.trim().split(/\s+/).filter(Boolean) : []; }
+function tagLabel(tag) { return tag === UNTAGGED ? '未分類' : tag; }
+function filterIdeas(ideas, tag) {
+  if (!tag) return ideas;
+  if (tag === UNTAGGED) return ideas.filter(i => !tagsOf(i).length);
+  return ideas.filter(i => tagsOf(i).includes(tag));
+}
+
+/* ── AIを呼ぶ（コメントもタグ付けも同じプロキシ） ── */
+async function callAI(prompt, maxTokens = 1000) {
+  const res = await fetch(AI_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: AI_MODEL,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  if (!res.ok) throw new Error(`AI proxy returned ${res.status}`);
+  const data = await res.json();
+  return data.content?.find(b => b.type === 'text')?.text || '';
+}
+
+/* ── AIによる自動タグ付け ── */
+// AIの返事から、候補（GENRES）にある言葉だけを最大3つ拾う
+function parseGenres(text) {
+  let items = [];
+  const m = text.match(/\[[\s\S]*?\]/);
+  if (m) {
+    try { const arr = JSON.parse(m[0]); if (Array.isArray(arr)) items = arr.map(String); } catch { /* 下で文字列として読む */ }
+  }
+  if (!items.length) items = text.split(/[,，、\n"'「」\[\]]/);
+  const out = [];
+  for (const raw of items) {
+    const t = raw.trim();
+    if (GENRES.includes(t) && !out.includes(t)) out.push(t);
+  }
+  return out.slice(0, 3);
+}
+
+// 合うジャンルを返す。オフラインやエラーのときは [] （保存は止めない）
+async function suggestGenres(idea) {
+  const prompt = `次のアイデアに合うジャンルを、下の候補の中から1〜3個選んでください。
+
+候補：${GENRES.join(' / ')}
+
+アイデアタイトル：${idea.title}
+メモ：${idea.memo || '（なし）'}
+
+返答は候補の名前だけを JSON 配列で。候補にない言葉は使わないこと。例：["${GENRES[1]}","${GENRES[2]}"]`;
+  try {
+    return parseGenres(await callAI(prompt, 100));
+  } catch (e) {
+    console.warn('Idea Catcher: auto-tag failed', e);
+    return [];
+  }
+}
+
+// ジャンルをタグに足す（自分で書いたタグはそのまま残す）。変わったら true
+function applyGenres(id, genres) {
+  let changed = false;
+  const ideas = loadIdeas().map(i => {
+    if (i.id !== id) return i;
+    const cur = tagsOf(i);
+    const add = genres.filter(g => !cur.includes(g));
+    if (!add.length) return i;
+    changed = true;
+    return { ...i, tags: [...cur, ...add], updatedAt: new Date().toISOString() };
+  });
+  if (changed) { saveIdeas(ideas); renderAll(); }
+  return changed;
+}
+
+async function autoTag(idea) {
+  const genres = await suggestGenres(idea);
+  if (genres.length && applyGenres(idea.id, genres)) showToast(`ジャンル：${genres.join('・')}`);
+}
+
+/* ── タグなしのアイデアにまとめてタグ付け ── */
+let bulkRunning = false;
+let bulkProgress = '';
+let bulkClearTimer = null;
+
+async function bulkTag() {
+  if (bulkRunning) return;
+  const targets = loadIdeas().filter(i => !tagsOf(i).length).map(i => i.id);
+  if (!targets.length) return;
+  bulkRunning = true;
+  clearTimeout(bulkClearTimer);
+  let tagged = 0;
+  for (let n = 0; n < targets.length; n++) {
+    bulkProgress = `${n + 1} / ${targets.length} 件目を判定中…`;
+    renderArchive();
+    const idea = loadIdeas().find(i => i.id === targets[n]);
+    if (!idea || tagsOf(idea).length) continue; // 途中で消された・手でタグがついたものは飛ばす
+    const genres = await suggestGenres(idea);
+    if (genres.length && applyGenres(idea.id, genres)) tagged++;
+  }
+  bulkRunning = false;
+  const failed = targets.length - tagged;
+  bulkProgress = `✓ ${tagged}件にタグを付けました${failed ? `（${failed}件はタグを付けられませんでした）` : ''}`;
+  renderAll();
+  showToast(tagged ? `${tagged}件にタグを付けました` : 'タグを付けられませんでした（オフライン？）');
+  bulkClearTimer = setTimeout(() => { bulkProgress = ''; renderArchive(); }, 8000);
+}
+
 /* ── 保存 ── */
 function saveIdea() {
   const title = document.getElementById('inp-title').value.trim();
   if (!title) { showToast('タイトルを入力してください'); return; }
   const memo  = document.getElementById('inp-memo').value.trim();
-  const tagRaw = document.getElementById('inp-tag').value.trim();
-  const tags  = tagRaw ? tagRaw.split(/\s+/).filter(Boolean) : [];
+  const tags  = parseTagInput(document.getElementById('inp-tag').value);
 
+  // 先に保存してから、AIのジャンル判定をあとから足す（AIが遅くても・失敗しても保存は終わっている）
+  const idea  = { id: Date.now(), title, memo, tags, createdAt: new Date().toISOString() };
   const ideas = loadIdeas();
-  ideas.unshift({ id: Date.now(), title, memo, tags, createdAt: new Date().toISOString() });
+  ideas.unshift(idea);
   saveIdeas(ideas);
 
   document.getElementById('inp-title').value = '';
   document.getElementById('inp-memo').value  = '';
   document.getElementById('inp-tag').value   = '';
 
-  showToast('保存しました');
+  showToast('保存しました（AIがジャンルを判定中…）');
   renderAll();
+  autoTag(idea);
 }
 
 /* ── ランダムピック + AIコメント ── */
@@ -950,11 +1176,17 @@ async function pickRandom(ideaOverride) {
   }
 
   let idea;
+  let eyebrow = "Today's pickup — AI selected";
   if (ideaOverride) {
     idea = ideaOverride;
+    eyebrow = 'Your pick — 選んだアイデア';
   } else {
+    // 一覧で絞り込み中なら、そのタグの中から選ぶ（0件なら全体から）
+    const filtered = filterIdeas(ideas, activeTag);
+    const base = filtered.length ? filtered : ideas;
+    if (activeTag && filtered.length) eyebrow = `Pickup — ${tagLabel(activeTag)} から`;
     // 直前と違うものを選ぶ
-    const pool = ideas.length > 1 ? ideas.filter(i => i.id !== currentPickId) : ideas;
+    const pool = base.length > 1 ? base.filter(i => i.id !== currentPickId) : base;
     idea = pool[Math.floor(Math.random() * pool.length)];
   }
   currentPickId = idea.id;
@@ -965,14 +1197,27 @@ async function pickRandom(ideaOverride) {
   card.classList.remove('visible');
   requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('visible')));
 
+  document.getElementById('card-eyebrow').textContent = eyebrow;
   document.getElementById('card-title').textContent = idea.title;
   document.getElementById('card-memo').textContent  = idea.memo || '';
   document.getElementById('card-date').textContent  = formatDate(idea.createdAt);
-
-  const tagsEl = document.getElementById('card-tags');
-  tagsEl.innerHTML = idea.tags.map(t => `<span class="card-tag">${t}</span>`).join('');
+  renderCardTags(idea);
 
   await fetchAIComment(idea);
+}
+
+function renderCardTags(idea) {
+  document.getElementById('card-tags').innerHTML =
+    tagsOf(idea).map(t => `<span class="card-tag">${escHtml(t)}</span>`).join(' ');
+}
+
+// 一覧の「💬 コメント」：そのアイデアをカードに出して、カードまでスクロール
+function commentOn(id) {
+  const idea = loadIdeas().find(i => i.id === id);
+  if (!idea) return;
+  pickRandom(idea);
+  requestAnimationFrame(() =>
+    document.getElementById('ai-card').scrollIntoView({ behavior: 'smooth', block: 'start' }));
 }
 
 async function regenComment() {
@@ -982,78 +1227,223 @@ async function regenComment() {
   await fetchAIComment(idea);
 }
 
-async function fetchAIComment(idea) {
-  const el = document.getElementById('ai-comment');
-  el.innerHTML = '<span class="spinner"></span>';
+/* ── コメントの切り口 ── */
+function ideaBlock(idea, heading = '') {
+  return `${heading}アイデアタイトル：${idea.title}
+メモ：${idea.memo || '（なし）'}
+タグ：${tagsOf(idea).join(', ') || '（なし）'}
+記録日：${formatDate(idea.createdAt)}`;
+}
+const ANSWER_ONLY = '返答はコメント本文のみ。余計な前置きや「はい」「わかりました」は不要。';
 
-  const prompt = `あなたはアイデアの価値を見抜くコンサルタントです。
+const ANGLES = [
+  {
+    id: 'trend',
+    label: '✨ 今の流れと照らし合わせる',
+    build: idea => `あなたはアイデアの価値を見抜くコンサルタントです。
 以下のアイデアを読み、2〜3文の短いコメントを書いてください。
 コメントのポイント：
 - 現在の技術・デザイン・創作・フリーランス・AI活用などのトレンドと照らし合わせて、このアイデアの今日的な価値や可能性を指摘する
 - または、忘れていたこのアイデアを「今こそ」動かすきっかけになるような視点を提供する
 - 日本語で、知的でドライな語り口で（ゆるすぎず、重すぎず）
 
-アイデアタイトル：${idea.title}
-メモ：${idea.memo || '（なし）'}
-タグ：${idea.tags.join(', ') || '（なし）'}
-記録日：${formatDate(idea.createdAt)}
+${ideaBlock(idea)}
 
-返答はコメント本文のみ。余計な前置きや「はい」「わかりました」は不要。`;
+${ANSWER_ONLY}`,
+  },
+  {
+    id: 'harsh',
+    label: '🔥 辛口でツッコむ',
+    build: idea => `あなたは率直で辛口な編集者です。
+以下のアイデアを読み、弱点・甘いところ・見落としている点を2〜3文で遠慮なくツッコんでください。
+コメントのポイント：
+- 「誰が本当に欲しいのか」「なぜ今までなかったのか」「続けられるのか」など、痛いところを具体的に突く
+- ただの否定で終わらせず、最後に「ここを詰めれば化ける」という一言を添える
+- 日本語で、歯切れよく。人格ではなくアイデアに対して辛口に
+
+${ideaBlock(idea)}
+
+${ANSWER_ONLY}`,
+  },
+  {
+    id: 'combine',
+    label: '🧩 ほかのアイデアと掛け合わせる',
+    build: (idea, partner) => `あなたは発想を広げるのが得意なクリエイティブディレクターです。
+同じ人が書きためた2つのアイデアを掛け合わせて、新しい組み合わせ案を出してください。
+コメントのポイント：
+- 2つを組み合わせた具体的な案を1つ、2〜4文で示す（何を作るか・誰に届くかがわかるように）
+- 意外な共通点や、片方がもう片方の弱点を補う点があれば触れる
+- 日本語で、知的でドライな語り口で
+
+${ideaBlock(idea, '【アイデアA】\n')}
+
+${ideaBlock(partner, '【アイデアB】\n')}
+
+${ANSWER_ONLY}`,
+  },
+  {
+    id: 'step',
+    label: '🌱 今日5分でできる小さな一歩',
+    build: idea => `あなたは行動を後押しするコーチです。
+以下のアイデアを前に進めるために、今日5分でできる小さな一歩を1つだけ提案してください。
+コメントのポイント：
+- 道具や準備がいらず、5分で終わる具体的な行動にする（例：「〇〇を3つ書き出す」「〇〇で検索して1つメモする」）
+- なぜそれが最初の一歩に向いているかを一言添える
+- 日本語で、2〜3文。やさしく、でも甘すぎずに
+
+${ideaBlock(idea)}
+
+${ANSWER_ONLY}`,
+  },
+];
+
+const ANGLE_KEY = 'ginsprout_idea_angle_v1';
+let currentAngle = (() => {
+  try { const v = localStorage.getItem(ANGLE_KEY); return ANGLES.some(a => a.id === v) ? v : 'trend'; }
+  catch { return 'trend'; }
+})();
+
+function renderAngleChips() {
+  document.getElementById('angle-chips').innerHTML = ANGLES.map(a =>
+    `<button type="button" class="angle-chip${a.id === currentAngle ? ' active' : ''}" data-angle="${a.id}" aria-pressed="${a.id === currentAngle}">${escHtml(a.label)}</button>`
+  ).join('');
+}
+
+function setAngle(id) {
+  if (!ANGLES.some(a => a.id === id)) return;
+  currentAngle = id;
+  try { localStorage.setItem(ANGLE_KEY, id); } catch { /* 覚えられなくても動く */ }
+  renderAngleChips();
+  regenComment();
+}
+
+let commentSeq = 0; // 新しいコメントを頼んだら、古い返事は表示しない
+
+async function fetchAIComment(idea) {
+  const seq = ++commentSeq;
+  const el = document.getElementById('ai-comment');
+  const labelEl = document.getElementById('ai-label');
+  el.innerHTML = '<span class="spinner"></span>';
+
+  let angle = ANGLES.find(a => a.id === currentAngle) || ANGLES[0];
+  let partner = null;
+  let note = '';
+  if (angle.id === 'combine') {
+    const others = loadIdeas().filter(i => i.id !== idea.id);
+    if (others.length) {
+      partner = others[Math.floor(Math.random() * others.length)];
+      note = ` × 「${partner.title}」`;
+    } else {
+      angle = ANGLES[0];
+      note = '（掛け合わせる相手がまだないので）';
+    }
+  }
+  labelEl.textContent = `AI comment — ${angle.label}${note}`;
 
   try {
-    const res = await fetch('https://ginsprout-proxy.yumco-taka.workers.dev/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const data = await res.json();
-    const text = data.content?.find(b => b.type === 'text')?.text || 'コメントを取得できませんでした。';
-    typewrite(el, text);
+    const text = await callAI(angle.build(idea, partner));
+    if (seq !== commentSeq) return;
+    typewrite(el, text || 'コメントを取得できませんでした。', 0, seq);
   } catch (e) {
+    if (seq !== commentSeq) return;
     el.textContent = 'AIコメントを取得できませんでした（オフライン？）';
   }
 }
 
-function typewrite(el, text, i = 0) {
-  if (i === 0) el.innerHTML = '';
+function typewrite(el, text, i = 0, seq = commentSeq) {
+  if (seq !== commentSeq) return; // 別のコメントに切り替わった
   if (i >= text.length) return;
-  el.innerHTML = text.slice(0, i + 1) + '<span class="cursor"></span>';
+  el.textContent = text.slice(0, i + 1);
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor';
+  el.appendChild(cursor);
   const delay = text[i] === '。' || text[i] === '、' ? 60 : 18;
-  setTimeout(() => typewrite(el, text, i + 1), delay);
+  setTimeout(() => typewrite(el, text, i + 1, seq), delay);
 }
 
 /* ── アーカイブ ── */
+let activeTag = null; // null = すべて / UNTAGGED = 未分類 / それ以外 = そのタグ
+
+function renderFilterBar(ideas) {
+  const bar = document.getElementById('filter-bar');
+  if (!ideas.length) { bar.innerHTML = ''; activeTag = null; return; }
+
+  const counts = new Map();
+  for (const i of ideas) for (const t of tagsOf(i)) counts.set(t, (counts.get(t) || 0) + 1);
+  const untagged = ideas.filter(i => !tagsOf(i).length).length;
+  // 絞り込み中のタグがなくなったら「すべて」に戻す
+  if (activeTag && activeTag !== UNTAGGED && !counts.has(activeTag)) activeTag = null;
+
+  // ジャンル候補の順 → それ以外のタグは件数の多い順
+  const order = t => { const g = GENRES.indexOf(t); return g === -1 ? GENRES.length : g; };
+  const tags = [...counts.keys()].sort((a, b) =>
+    order(a) - order(b) || counts.get(b) - counts.get(a) || a.localeCompare(b, 'ja'));
+
+  const chip = (value, label, count) => {
+    const on = activeTag === value;
+    return `<button type="button" class="filter-chip${on ? ' active' : ''}" data-tag="${escHtml(value ?? '')}" aria-pressed="${on}">${escHtml(label)}<span class="count">${count}</span></button>`;
+  };
+  bar.innerHTML = [
+    chip(null, 'すべて', ideas.length),
+    chip(UNTAGGED, '未分類', untagged),
+    ...tags.map(t => chip(t, t, counts.get(t))),
+  ].join('');
+}
+
+function renderBulkRow(ideas) {
+  const row = document.getElementById('bulk-row');
+  const n = ideas.filter(i => !tagsOf(i).length).length;
+  const showBtn = n > 0 || bulkRunning;
+  row.innerHTML =
+    (showBtn ? `<button type="button" class="btn-backup" onclick="bulkTag()"${bulkRunning ? ' disabled' : ''}>✦ タグなしのアイデアにまとめてタグ付け（${n}件）</button>` : '') +
+    (bulkProgress ? `<span class="bulk-progress" role="status" aria-live="polite">${escHtml(bulkProgress)}</span>` : '');
+}
+
 function renderArchive() {
   const ideas = loadIdeas();
   const list  = document.getElementById('archive-list');
   const label = document.getElementById('archive-count-label');
-  label.textContent = `すべてのアイデア（${ideas.length}件）`;
+
+  renderFilterBar(ideas);
+  renderBulkRow(ideas);
+
+  const shown = filterIdeas(ideas, activeTag);
+  label.textContent = activeTag
+    ? `すべてのアイデア（${ideas.length}件中「${tagLabel(activeTag)}」${shown.length}件）`
+    : `すべてのアイデア（${ideas.length}件）`;
 
   if (!ideas.length) { list.innerHTML = ''; return; }
+  if (!shown.length) {
+    list.innerHTML = `<div class="archive-empty">「${escHtml(tagLabel(activeTag))}」のアイデアはありません</div>`;
+    return;
+  }
 
-  list.innerHTML = ideas.map(idea => `
+  list.innerHTML = shown.map(idea => `
     <div class="archive-item" data-id="${idea.id}">
       <div class="archive-title">${escHtml(idea.title)}</div>
+      ${idea.memo ? `<div class="archive-memo">${escHtml(idea.memo)}</div>` : ''}
+      ${tagsOf(idea).length ? `<div class="archive-tags">${tagsOf(idea).map(t=>`<span class="archive-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
+      <div class="archive-meta" style="grid-column:1">${formatDate(idea.createdAt)}</div>
       <div class="archive-btns">
+        <button class="btn-comment" onclick="commentOn(${idea.id})" title="AIにコメントをもらう">💬 コメント</button>
         <button class="btn-edit" onclick="openEdit(${idea.id})" title="編集">✎ 編集</button>
         <button class="btn-del"  onclick="deleteIdea(${idea.id})" title="削除">× 削除</button>
       </div>
-      ${idea.memo ? `<div class="archive-memo">${escHtml(idea.memo)}</div>` : ''}
-      ${idea.tags.length ? `<div class="archive-tags">${idea.tags.map(t=>`<span class="archive-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
-      <div class="archive-meta" style="grid-column:1">${formatDate(idea.createdAt)}</div>
     </div>
   `).join('');
 }
 
-function toggleArchive() {
+function toggleArchive(forceOpen) {
   const list  = document.getElementById('archive-list');
   const arrow = document.getElementById('toggle-arrow');
-  const open  = list.classList.toggle('open');
+  const open  = forceOpen === true ? list.classList.toggle('open', true) : list.classList.toggle('open');
   arrow.classList.toggle('open', open);
+}
+
+function setFilter(tag) {
+  activeTag = tag || null;
+  renderArchive();
+  toggleArchive(true); // 絞り込んだら一覧を開いて見せる
 }
 
 function deleteIdea(id) {
@@ -1073,7 +1463,8 @@ function openEdit(id) {
   editingId = id;
   document.getElementById('edit-title').value = idea.title;
   document.getElementById('edit-memo').value  = idea.memo || '';
-  document.getElementById('edit-tag').value   = idea.tags.join(' ');
+  document.getElementById('edit-tag').value   = tagsOf(idea).join(' ');
+  renderEditGenres();
   document.getElementById('edit-modal').classList.add('show');
   document.getElementById('edit-title').focus();
 }
@@ -1087,8 +1478,7 @@ function saveEdit() {
   const title = document.getElementById('edit-title').value.trim();
   if (!title) { showToast('タイトルを入力してください'); return; }
   const memo   = document.getElementById('edit-memo').value.trim();
-  const tagRaw = document.getElementById('edit-tag').value.trim();
-  const tags   = tagRaw ? tagRaw.split(/\s+/).filter(Boolean) : [];
+  const tags   = parseTagInput(document.getElementById('edit-tag').value);
   const ideas = loadIdeas().map(i =>
     i.id === editingId ? { ...i, title, memo, tags, updatedAt: new Date().toISOString() } : i
   );
@@ -1096,6 +1486,22 @@ function saveEdit() {
   closeModal();
   showToast('更新しました');
   renderAll();
+}
+
+// 編集画面のジャンルボタン：押すとタグ欄につけ外しする
+function renderEditGenres() {
+  const tags = parseTagInput(document.getElementById('edit-tag').value);
+  document.getElementById('edit-genres').innerHTML = GENRES.map(g => {
+    const on = tags.includes(g);
+    return `<button type="button" class="modal-genre${on ? ' active' : ''}" data-genre="${escHtml(g)}" aria-pressed="${on}">${escHtml(g)}</button>`;
+  }).join('');
+}
+
+function toggleEditGenre(genre) {
+  const input = document.getElementById('edit-tag');
+  const tags = parseTagInput(input.value);
+  input.value = (tags.includes(genre) ? tags.filter(t => t !== genre) : [...tags, genre]).join(' ');
+  renderEditGenres();
 }
 
 /* ── バックアップ／復元 ── */
@@ -1229,7 +1635,7 @@ async function exportPDF() {
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function renderAll() {
@@ -1243,15 +1649,31 @@ function renderAll() {
     // カードが表示中なら現在のアイデアが残っているかチェック
     const current = ideas.find(i => i.id === currentPickId);
     if (!current) pickRandom();
+    else renderCardTags(current); // 自動タグ付けなどでタグが変わったとき
   }
 }
 
 /* ── 初期化 ── */
 window.addEventListener('load', () => {
+  renderAngleChips();
   renderArchive();
   pickRandom();
   renderSyncSection();
   Sync.load();
+
+  document.getElementById('filter-bar').addEventListener('click', e => {
+    const b = e.target.closest('.filter-chip');
+    if (b) setFilter(b.dataset.tag);
+  });
+  document.getElementById('angle-chips').addEventListener('click', e => {
+    const b = e.target.closest('.angle-chip');
+    if (b) setAngle(b.dataset.angle);
+  });
+  document.getElementById('edit-genres').addEventListener('click', e => {
+    const b = e.target.closest('.modal-genre');
+    if (b) toggleEditGenre(b.dataset.genre);
+  });
+  document.getElementById('edit-tag').addEventListener('input', renderEditGenres);
 
   // Enterキーで保存
   // モーダル背景クリックで閉じる
