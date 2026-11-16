@@ -393,7 +393,7 @@
     gap: 6px 18px;
     margin-top: 10px;
   }
-  .btn-del, .btn-edit, .btn-comment {
+  .btn-del, .btn-edit, .btn-comment, .btn-bloom {
     background: none;
     border: none;
     cursor: pointer;
@@ -677,6 +677,22 @@
 
   .modal-genres { display: flex; flex-wrap: wrap; gap: 6px; }
 
+  /* ── 昇華枠 ── */
+  .bloom-section { margin-top: 32px; }
+  .bloom-toggle { color: #b39a5a; }
+  .bloom-toggle:hover { color: var(--gold); }
+  .archive-list-body {
+    margin-top: 16px;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .archive-list-body.open { display: flex; }
+  .archive-item.bloomed { border-left: 3px solid var(--gold); }
+  .archive-item.bloomed .archive-caret { color: var(--gold); }
+  .btn-bloom { color: #a08a50; }
+  .btn-bloom:hover { color: var(--gold); }
+
   /* ── スマホ：指で押しやすく ── */
   @media (max-width: 600px) {
     #ai-card { padding: 24px 20px 22px; }
@@ -686,7 +702,7 @@
     .archive-head { padding: 12px 14px; }
     .archive-body { padding: 0 14px 14px 34px; }
     .archive-btns { gap: 8px; }
-    .btn-del, .btn-edit, .btn-comment {
+    .btn-del, .btn-edit, .btn-comment, .btn-bloom {
       min-height: 44px;
       padding: 0 14px;
       border: 1px solid #3a3550;
@@ -759,6 +775,17 @@
   <div class="filter-bar" id="filter-bar" role="group" aria-label="タグで絞り込む"></div>
   <div class="bulk-row" id="bulk-row"></div>
   <div id="archive-list"></div>
+</div>
+
+<!-- 昇華枠（中身はrenderBloomSectionで描画） -->
+<div class="archive-section bloom-section" id="bloom-section" style="display:none">
+  <div class="archive-header">
+    <button class="archive-toggle bloom-toggle" onclick="toggleBloomList()">
+      <span class="toggle-arrow" id="bloom-arrow">▶</span>
+      <span id="bloom-count-label">🌸 昇華したアイデア</span>
+    </button>
+  </div>
+  <div id="bloom-list" class="archive-list-body"></div>
 </div>
 
 <!-- GitHub同期（中身はrenderSyncSectionで描画） -->
@@ -1055,6 +1082,9 @@ function showToast(msg) {
 const UNTAGGED = '__untagged__'; // 絞り込み「未分類」の目印
 function tagsOf(idea) { return Array.isArray(idea.tags) ? idea.tags : []; }
 function parseTagInput(raw) { return raw.trim() ? raw.trim().split(/\s+/).filter(Boolean) : []; }
+const BLOOM_TAG = '🌸昇華'; // 昇華枠の目印のタグ（GENRESには入れない）
+function isBloomed(idea) { return tagsOf(idea).includes(BLOOM_TAG); }
+function growingIdeas(ideas) { return ideas.filter(i => !isBloomed(i)); }
 function tagLabel(tag) { return tag === UNTAGGED ? '未分類' : tag; }
 function filterIdeas(ideas, tag) {
   if (!tag) return ideas;
@@ -1140,7 +1170,7 @@ let bulkClearTimer = null;
 
 async function bulkTag() {
   if (bulkRunning) return;
-  const targets = loadIdeas().filter(i => !tagsOf(i).length).map(i => i.id);
+  const targets = growingIdeas(loadIdeas()).filter(i => !tagsOf(i).length).map(i => i.id);
   if (!targets.length) return;
   bulkRunning = true;
   clearTimeout(bulkClearTimer);
@@ -1201,8 +1231,10 @@ async function pickRandom(ideaOverride) {
     eyebrow = 'Your pick — 選んだアイデア';
   } else {
     // 一覧で絞り込み中なら、そのタグの中から選ぶ（0件なら全体から）
-    const filtered = filterIdeas(ideas, activeTag);
-    const base = filtered.length ? filtered : ideas;
+    // 昇華したものは引かない（ぜんぶ昇華済みなら全体から）
+    const growing = growingIdeas(ideas).length ? growingIdeas(ideas) : ideas;
+    const filtered = filterIdeas(growing, activeTag);
+    const base = filtered.length ? filtered : growing;
     if (activeTag && filtered.length) eyebrow = `Pickup — ${tagLabel(activeTag)} から`;
     // 直前と違うものを選ぶ
     const pool = base.length > 1 ? base.filter(i => i.id !== currentPickId) : base;
@@ -1419,7 +1451,8 @@ function renderBulkRow(ideas) {
 }
 
 function renderArchive() {
-  const ideas = loadIdeas();
+  const allIdeas = loadIdeas();
+  const ideas = growingIdeas(allIdeas); // 昇華したものは下の昇華枠へ
   const list  = document.getElementById('archive-list');
   const label = document.getElementById('archive-count-label');
 
@@ -1431,14 +1464,20 @@ function renderArchive() {
     ? `すべてのアイデア（${ideas.length}件中「${tagLabel(activeTag)}」${shown.length}件）`
     : `すべてのアイデア（${ideas.length}件）`;
 
-  if (!ideas.length) { list.innerHTML = ''; return; }
-  if (!shown.length) {
+  if (!ideas.length) {
+    list.innerHTML = allIdeas.length ? '<div class="archive-empty">育成中のアイデアはありません。ぜんぶ昇華しました 🌸</div>' : '';
+  } else if (!shown.length) {
     list.innerHTML = `<div class="archive-empty">「${escHtml(tagLabel(activeTag))}」のアイデアはありません</div>`;
-    return;
+  } else {
+    list.innerHTML = shown.map(archiveItemHtml).join('');
   }
+  renderBloomSection(allIdeas.filter(isBloomed));
+}
 
-  list.innerHTML = shown.map(idea => `
-    <div class="archive-item${expandedIds.has(idea.id) ? ' open' : ''}" data-id="${idea.id}">
+function archiveItemHtml(idea) {
+  const bloomed = isBloomed(idea);
+  return `
+    <div class="archive-item${expandedIds.has(idea.id) ? ' open' : ''}${bloomed ? ' bloomed' : ''}" data-id="${idea.id}">
       <button type="button" class="archive-head" onclick="toggleItem(${idea.id})" aria-expanded="${expandedIds.has(idea.id)}">
         <span class="archive-caret" aria-hidden="true">▶</span>
         <span class="archive-title">${escHtml(idea.title)}</span>
@@ -1448,13 +1487,47 @@ function renderArchive() {
       ${idea.memo ? `<div class="archive-memo">${escHtml(idea.memo)}</div>` : ''}
       ${tagsOf(idea).length ? `<div class="archive-tags">${tagsOf(idea).map(t=>`<span class="archive-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
       <div class="archive-btns">
+        <button class="btn-bloom" onclick="toggleBloom(${idea.id})" title="${bloomed ? '育成中の一覧に戻す' : '形になったアイデアを昇華枠へ'}">${bloomed ? '↩ 育成中に戻す' : '🌸 昇華'}</button>
         <button class="btn-comment" onclick="commentOn(${idea.id})" title="AIにコメントをもらう">💬 コメント</button>
         <button class="btn-edit" onclick="openEdit(${idea.id})" title="編集">✎ 編集</button>
         <button class="btn-del"  onclick="deleteIdea(${idea.id})" title="削除">× 削除</button>
       </div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+}
+
+/* ── 昇華枠：咲いた（形になった）アイデア ──
+   データの形は変えず、タグ BLOOM_TAG がついているものを「昇華」として扱う。
+   昇華したものは、ふつうの一覧・絞り込み・ランダム表示・まとめてタグ付けの対象から外す。 */
+function renderBloomSection(bloomed) {
+  const sec = document.getElementById('bloom-section');
+  if (!bloomed.length) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  document.getElementById('bloom-count-label').textContent = `🌸 昇華したアイデア（${bloomed.length}件）`;
+  document.getElementById('bloom-list').innerHTML = bloomed.map(archiveItemHtml).join('');
+}
+
+function toggleBloomList() {
+  const list  = document.getElementById('bloom-list');
+  const open  = list.classList.toggle('open');
+  document.getElementById('bloom-arrow').classList.toggle('open', open);
+}
+
+function toggleBloom(id) {
+  let nowBloomed = false;
+  const ideas = loadIdeas().map(i => {
+    if (i.id !== id) return i;
+    const tags = tagsOf(i);
+    nowBloomed = !tags.includes(BLOOM_TAG);
+    return {
+      ...i,
+      tags: nowBloomed ? [...tags, BLOOM_TAG] : tags.filter(t => t !== BLOOM_TAG),
+      updatedAt: new Date().toISOString(),
+    };
+  });
+  saveIdeas(ideas);
+  showToast(nowBloomed ? '🌸 昇華枠に入れました' : '育成中の一覧に戻しました');
+  renderAll();
 }
 
 // 開いているアイデア（描き直しても開いたままにする）
