@@ -313,24 +313,52 @@
   }
   #archive-list.open { display: flex; }
 
+  /* 一覧はタイトルだけ。タップで中身（メモ・タグ・ボタン）を開く */
   .archive-item {
     background: #1e1b38;
     border: 1px solid #3a3550;
     border-radius: 3px;
-    padding: 16px 18px;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 6px 12px;
-    align-items: start;
+    transition: border-color .2s;
   }
+  .archive-item.open { border-color: #4a4570; }
+  .archive-head {
+    width: 100%;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    background: none;
+    border: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+  }
+  .archive-head:hover .archive-title { color: #fff; }
+  .archive-head:focus-visible { outline: 1px solid var(--teal); outline-offset: -1px; }
+  .archive-caret {
+    color: var(--ghost);
+    font-size: .7rem;
+    transition: transform .2s;
+    flex: none;
+  }
+  .archive-item.open .archive-caret { transform: rotate(90deg); }
   .archive-title {
+    flex: 1;
+    min-width: 0;
     font-family: 'DM Serif Display', serif;
     font-size: .95rem;
     color: var(--paper);
     line-height: 1.4;
+    transition: color .2s;
   }
+  .archive-body {
+    display: none;
+    padding: 0 18px 14px 38px;
+  }
+  .archive-item.open .archive-body { display: block; }
   .archive-memo {
-    grid-column: 1;
     font-size: .78rem;
     color: #7a7262;
     line-height: 1.65;
@@ -343,8 +371,8 @@
     font-family: 'DM Mono', monospace;
     white-space: nowrap;
   }
+  .archive-meta { flex: none; }
   .archive-tags {
-    grid-column: 1;
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
@@ -359,14 +387,12 @@
     font-family: 'DM Mono', monospace;
   }
   .archive-btns {
-    grid-row: 1 / span 4;
-    grid-column: 2;
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: flex-end;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px 18px;
+    margin-top: 10px;
   }
-  .archive-title { grid-column: 1; }
   .btn-del, .btn-edit, .btn-comment {
     background: none;
     border: none;
@@ -657,16 +683,9 @@
     .btn-ghost, .btn-backup, .filter-chip, .angle-chip, .modal-genre { min-height: 44px; }
     .btn-ghost { flex: 1 1 auto; }
     .backup-actions { flex-wrap: wrap; }
-    .archive-item { grid-template-columns: 1fr; }
-    .archive-btns {
-      grid-column: 1;
-      grid-row: auto;
-      flex-direction: row;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 8px;
-    }
+    .archive-head { padding: 12px 14px; }
+    .archive-body { padding: 0 14px 14px 34px; }
+    .archive-btns { gap: 8px; }
     .btn-del, .btn-edit, .btn-comment {
       min-height: 44px;
       padding: 0 14px;
@@ -1419,18 +1438,35 @@ function renderArchive() {
   }
 
   list.innerHTML = shown.map(idea => `
-    <div class="archive-item" data-id="${idea.id}">
-      <div class="archive-title">${escHtml(idea.title)}</div>
+    <div class="archive-item${expandedIds.has(idea.id) ? ' open' : ''}" data-id="${idea.id}">
+      <button type="button" class="archive-head" onclick="toggleItem(${idea.id})" aria-expanded="${expandedIds.has(idea.id)}">
+        <span class="archive-caret" aria-hidden="true">▶</span>
+        <span class="archive-title">${escHtml(idea.title)}</span>
+        <span class="archive-meta">${formatDate(idea.createdAt)}</span>
+      </button>
+      <div class="archive-body">
       ${idea.memo ? `<div class="archive-memo">${escHtml(idea.memo)}</div>` : ''}
       ${tagsOf(idea).length ? `<div class="archive-tags">${tagsOf(idea).map(t=>`<span class="archive-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
-      <div class="archive-meta" style="grid-column:1">${formatDate(idea.createdAt)}</div>
       <div class="archive-btns">
         <button class="btn-comment" onclick="commentOn(${idea.id})" title="AIにコメントをもらう">💬 コメント</button>
         <button class="btn-edit" onclick="openEdit(${idea.id})" title="編集">✎ 編集</button>
         <button class="btn-del"  onclick="deleteIdea(${idea.id})" title="削除">× 削除</button>
       </div>
+      </div>
     </div>
   `).join('');
+}
+
+// 開いているアイデア（描き直しても開いたままにする）
+const expandedIds = new Set();
+
+function toggleItem(id) {
+  const open = !expandedIds.has(id);
+  if (open) expandedIds.add(id); else expandedIds.delete(id);
+  const item = document.querySelector(`.archive-item[data-id="${id}"]`);
+  if (!item) return;
+  item.classList.toggle('open', open);
+  item.querySelector('.archive-head').setAttribute('aria-expanded', open);
 }
 
 function toggleArchive(forceOpen) {
