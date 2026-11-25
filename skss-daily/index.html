@@ -48,10 +48,11 @@
   input,textarea{font:inherit;color:inherit;}
 
   /* top summary */
-  .top-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  .top-summary{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;
     background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
     box-shadow:var(--shadow);padding:14px 18px;margin-bottom:16px;}
   .date-badge{font-family:"Zen Maru Gothic",sans-serif;font-weight:700;font-size:16.5px;}
+  .month-end-note{flex-basis:100%;font-size:13px;font-weight:700;color:#a3321f;line-height:1.5;}
   .week-badge{font-size:13px;font-weight:700;color:var(--clay-deep);background:var(--clay-soft);
     border:1px solid var(--clay-line);border-radius:999px;padding:6px 12px;white-space:nowrap;}
 
@@ -293,6 +294,8 @@ function mondayOf(key){
   d.setDate(d.getDate() + diff);
   return toKey(d);
 }
+// the last day of its month (tomorrow falls in a different month)
+function isMonthEnd(key){ return addDays(key, 1).slice(0, 7) !== key.slice(0, 7); }
 function isInWeek(dateKey, mondayKey){
   return dateKey >= mondayKey && dateKey <= addDays(mondayKey, 6);
 }
@@ -858,6 +861,7 @@ function renderTodayView(){
     <section class="top-summary">
       <div class="date-badge">${esc(formatJP(entry.date))}</div>
       <div class="week-badge">🌸 今週 ${weekCount}件</div>
+      ${isMonthEnd(entry.date) ? `<p class="month-end-note">📥 今日を入力し終わったら、今月のログをダウンロードしよう！（過去ログ →「月ごとに出力」）</p>` : ""}
     </section>
 
     ${lastYear ? `<section class="card"><h2 class="card-title">🕰 1年前の今日</h2>
