@@ -303,12 +303,13 @@ const STORAGE_KEY = "skssDaily.v1.entries";
 /* ---------- data model (see SPEC.md in this folder) ----------
    Each entry is keyed by the INPUT date (the morning it was written).
    seed/root/branch/bloom/soil, seedLevel/rootLevel and activityLoad describe the PREVIOUS
-   day's activity; todayGoal / todayGoalType are the goal for the input date itself.
+   day's activity; todayGoal / todayGoalTypes are the goal for the input date itself.
      seed, root, branch, bloom, soil : [{ text, image }]   (soil is absent on pre-v1.0-spec entries = 未記録)
      seedLevel, rootLevel           : null(未記録) | "none" | "some" | "many"
      activityLoad                   : { creative, employment, household, obligations, rest } each null | 0..4
      todayGoal                      : string  (shown as 「今日の着地点」; was 「今日の咲候補」)
-     todayGoalType                  : null | "seed" | "root" | "branch" | "bloom" | "soil" | "rest"
+     todayGoalTypes                 : [] | subset of ["seed","root","branch","bloom","soil","rest"] (multi-select, [] = 未選択)
+                                      (the single-value `todayGoalType` of the first v1.0 build is read in and then dropped)
    null / missing always means 未記録 — never treat it as なし or 0. */
 
 /* ---------- categories ---------- */
@@ -360,7 +361,7 @@ function createEmptyEntry(dateKey){
   const entry = {
     date: dateKey,
     todayGoal: "",
-    todayGoalType: null,
+    todayGoalTypes: [],
     memo: "",
     seedLevel: null,
     rootLevel: null,
@@ -391,7 +392,11 @@ function normalizeEntry(raw, dateKey){
   }
   const load = raw.activityLoad && typeof raw.activityLoad === "object" ? raw.activityLoad : {};
   entry.activityLoad = Object.fromEntries(ACTIVITY_DOMAINS.map((d) => [d.key, validLoad(load[d.key])]));
-  entry.todayGoalType = GOAL_TYPE_LABEL[raw.todayGoalType] ? raw.todayGoalType : null;
+  // 分類は複数選択。最初の版の単一選択 todayGoalType は配列に読み替え、以後は todayGoalTypes だけを保存する
+  const rawTypes = Array.isArray(raw.todayGoalTypes) ? raw.todayGoalTypes
+    : (GOAL_TYPE_LABEL[raw.todayGoalType] ? [raw.todayGoalType] : []);
+  entry.todayGoalTypes = GOAL_TYPES.map((t) => t.value).filter((v) => rawTypes.includes(v)); // keep display order
+  delete entry.todayGoalType;
   for (const c of CHECKS) entry[c.key] = { ...createEmptyEntry(dateKey)[c.key], ...(raw[c.key] || {}) };
   // "memo" briefly shipped as a chip-list category before becoming a free-text field —
   // fold any already-added items into the text so nothing typed in that window is lost
@@ -803,9 +808,9 @@ const LOAD_LEGEND = `<p class="load-legend">0 なし・1 少なめ・2 普通・
 function renderGoalTypeRow(entry){
   return `
     <div class="type-row" role="group" aria-label="着地点の分類">
-      <span class="type-label">分類（任意）</span>
+      <span class="type-label">分類（任意・複数可）</span>
       ${GOAL_TYPES.map((t) => `<button type="button" class="type-btn" data-action="set-goal-type"
-        data-date="${entry.date}" data-value="${t.value}" aria-pressed="${entry.todayGoalType === t.value}">${t.emoji}${t.label}</button>`).join("")}
+        data-date="${entry.date}" data-value="${t.value}" aria-pressed="${entry.todayGoalTypes.includes(t.value)}">${t.emoji}${t.label}</button>`).join("")}
     </div>`;
 }
 
@@ -1246,10 +1251,12 @@ function handleSetLoad(btn){
 
 function handleSetGoalType(btn){
   const entry = getEntry(btn.dataset.date);
-  const value = entry.todayGoalType === btn.dataset.value ? null : btn.dataset.value;
-  entry.todayGoalType = value;
+  const v = btn.dataset.value;
+  const on = !entry.todayGoalTypes.includes(v);
+  const next = on ? [...entry.todayGoalTypes, v] : entry.todayGoalTypes.filter((x) => x !== v);
+  entry.todayGoalTypes = GOAL_TYPES.map((t) => t.value).filter((x) => next.includes(x));
   persistEntry(btn.dataset.date);
-  setPressed(btn, value !== null);
+  btn.setAttribute("aria-pressed", String(on)); // multi-select: other buttons keep their state
 }
 
 function handleToggleDetail(btn){
@@ -1321,13 +1328,16 @@ function chatLoadLine(e){
   if (values.every((v) => v === null)) return "活動量（0〜4）：未記録";
   return `活動量（0〜4）：${ACTIVITY_DOMAINS.map((d, i) => `${d.short}${values[i] === null ? "未記録" : values[i]}`).join("／")}`;
 }
+function goalTypesText(e){
+  return e.todayGoalTypes.length ? `（${e.todayGoalTypes.map((v) => GOAL_TYPE_LABEL[v]).join("・")}）` : "";
+}
 function buildChatEntry(e){
   const prev = addDays(e.date, -1);
   const lines = [`■ ${e.date} 入力（前日 ${prev} の活動記録）`];
   for (const c of CATEGORIES) lines.push(c.levelKey ? chatLevelLine(e, c) : chatListLine(e, c));
   lines.push(chatLoadLine(e));
   for (const c of CHECKS) lines.push(`${c.label.replace(/済み$/, "")}：${e[c.key].checked ? "済" : "未チェック"}`);
-  const type = e.todayGoalType ? `（${GOAL_TYPE_LABEL[e.todayGoalType]}）` : "";
+  const type = goalTypesText(e);
   lines.push(`今日（${e.date}）の着地点${type}：${e.todayGoal.trim() ? e.todayGoal.trim() : "未記入"}`);
   lines.push(`メモ：${e.memo.trim() ? e.memo.trim() : "未記入"}`);
   return lines.join("\n");
@@ -1426,7 +1436,7 @@ function buildPrintableHtml(month){
     }).join("");
     const loadHtml = ACTIVITY_DOMAINS.map((d) => `${d.emoji}${esc(d.short)} ${e.activityLoad[d.key] === null ? "−" : e.activityLoad[d.key]}`).join("　");
     const checksHtml = CHECKS.map((c) => `<span>${c.emoji} ${esc(c.label)}：${e[c.key].checked ? "✓" : "−"}</span>`).join("　");
-    const goalType = e.todayGoalType ? `（${GOAL_TYPE_LABEL[e.todayGoalType]}）` : "";
+    const goalType = goalTypesText(e);
     return `
       <section class="entry">
         <h2>${esc(formatJP(e.date))}</h2>

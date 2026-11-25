@@ -1,6 +1,6 @@
 # SKSS Daily 改造仕様書
 
-- 版：1.0（2026-11-26）
+- 版：1.1（2026-11-26。1.0から今日の着地点の分類を複数選択に変更）
 - 対象：既存の SKSS Daily
 - 実装担当：Claude / Codex
 - 目的：創作・事業の成果だけでなく、生活全体の活動負荷と前進を把握し、AIによる進捗分析の精度を上げる。
@@ -57,7 +57,7 @@
 - ラベル：🎯 今日の着地点
 - 説明：今日ここまで進めば十分、という地点をひとつ
 - 既存の自由記述欄を維持する。
-- 任意の分類：種／根／枝／咲／土／休養（未選択可、単一選択）
+- 任意の分類：種／根／枝／咲／土／休養（未選択可、複数選択可）※1.1で単一選択から変更
 - 例：Servicesページの骨組み完成（枝）、手続きの書類をそろえる（土）、ゲームをして休む（休養）。
 - 翌日に達成状況を入力させる機能は今回は必須としない。
 
@@ -129,7 +129,8 @@ rootLevel: null | none | some | many
 soil: 既存の枝・咲と同等の項目配列
 activityLoad: { creative, employment, household, obligations, rest }
   各値: null | 0 | 1 | 2 | 3 | 4
-todayGoalType: null | seed | root | branch | bloom | soil | rest
+todayGoalTypes: [] | seed・root・branch・bloom・soil・rest の組み合わせ（複数選択。[] は未選択）
+  ※1.0初版の単一値 todayGoalType は読み込み時に配列へ変換し、保存時には持たない
 ```
 
 - 既存の種・根・枝・咲・メモ・目標・写真・チェック項目を保持する。
