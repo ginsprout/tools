@@ -197,6 +197,50 @@
   .sync-card .backup-btn.primary{background:var(--sprout-deep);border-color:var(--sprout-deep);color:#fff;}
   .sync-card .backup-btn.danger{border-color:#efb7ab;color:#a3321f;}
 
+  /* level selector (種・根: なし／あり／多数) */
+  .seg{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
+  .seg-btn,.load-btn,.type-btn{border:1.5px solid var(--line);background:#fff;color:var(--ink-soft);font-weight:700;}
+  .seg-btn{min-width:58px;min-height:40px;padding:0 12px;border-radius:999px;font-size:13.5px;}
+  .seg-btn[aria-pressed="true"],.load-btn[aria-pressed="true"]{background:var(--sprout-deep);border-color:var(--sprout-deep);color:#fff;}
+  .detail-toggle{min-height:40px;padding:0 6px;margin-left:auto;font-size:12.5px;font-weight:700;color:var(--ink-soft);
+    text-decoration:underline;text-underline-offset:3px;}
+  .detail-area{margin-top:10px;}
+  .detail-area[hidden]{display:none;}
+
+  /* activity load (0〜4) */
+  .load-legend{font-size:11.5px;color:var(--ink-soft);margin:-6px 0 10px;}
+  .load-row{display:flex;align-items:center;gap:8px;padding:5px 0;}
+  .load-row + .load-row{border-top:1px dashed var(--line);}
+  .load-label{flex:1;min-width:0;font-size:13px;font-weight:700;font-family:"Zen Maru Gothic",sans-serif;line-height:1.35;}
+  .load-btns{display:flex;gap:4px;flex-shrink:0;}
+  .load-btn{width:34px;height:42px;border-radius:10px;font-size:14.5px;}
+  @media(min-width:400px){ .load-btn{width:40px;} }
+
+  /* goal type */
+  .type-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px;}
+  .type-row .type-label{font-size:12px;color:var(--ink-soft);font-weight:700;margin-right:2px;}
+  .type-btn{min-height:36px;padding:0 11px;border-radius:999px;font-size:13px;}
+  .type-btn[aria-pressed="true"]{background:var(--clay-soft);border-color:var(--clay);color:var(--clay-deep);}
+
+  /* weekly summary */
+  .week-nav{display:flex;align-items:center;gap:8px;margin-bottom:2px;}
+  .week-nav .card-title{flex:1;margin:0;}
+  .week-nav-btn{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#fff;
+    font-weight:700;color:var(--sprout-deep);}
+  .week-nav-btn:disabled{opacity:.35;cursor:default;}
+  .sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:14px;}
+  .sum-cell{background:var(--bg);border-radius:12px;padding:9px 12px;}
+  .sum-cell .sum-label{display:block;font-size:12.5px;font-weight:700;color:var(--sprout-deep);}
+  .sum-cell .sum-val{font-family:"Zen Maru Gothic",sans-serif;font-weight:700;font-size:20px;}
+  .sum-cell .sum-val small{font-size:12px;margin-left:2px;color:var(--ink-soft);}
+  .sum-cell .sum-val.none{font-size:14px;color:var(--ink-soft);}
+  .sum-cell .sum-note{display:block;font-size:11px;color:var(--ink-soft);line-height:1.4;}
+  .sum-heading{font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;}
+  .bar-row{display:grid;grid-template-columns:7.5em 1fr 6.5em;align-items:center;gap:8px;font-size:12.5px;padding:3px 0;}
+  .bar-track{height:10px;border-radius:999px;background:var(--bg);overflow:hidden;}
+  .bar-fill{height:100%;border-radius:999px;background:var(--sprout);}
+  .bar-val{text-align:right;color:var(--ink-soft);white-space:nowrap;}
+
   /* toast */
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
     background:var(--sprout-deep);color:#fff;padding:11px 20px;border-radius:999px;font-size:13.5px;
@@ -256,13 +300,56 @@ function isInWeek(dateKey, mondayKey){
 /* ---------- storage (localStorage now; swap-friendly for IndexedDB/Supabase later) ---------- */
 const STORAGE_KEY = "skssDaily.v1.entries";
 
+/* ---------- data model (see SPEC.md in this folder) ----------
+   Each entry is keyed by the INPUT date (the morning it was written).
+   seed/root/branch/bloom/soil, seedLevel/rootLevel and activityLoad describe the PREVIOUS
+   day's activity; todayGoal / todayGoalType are the goal for the input date itself.
+     seed, root, branch, bloom, soil : [{ text, image }]   (soil is absent on pre-v1.0-spec entries = 未記録)
+     seedLevel, rootLevel           : null(未記録) | "none" | "some" | "many"
+     activityLoad                   : { creative, employment, household, obligations, rest } each null | 0..4
+     todayGoal                      : string  (shown as 「今日の着地点」; was 「今日の咲候補」)
+     todayGoalType                  : null | "seed" | "root" | "branch" | "bloom" | "soil" | "rest"
+   null / missing always means 未記録 — never treat it as なし or 0. */
+
 /* ---------- categories ---------- */
 const CATEGORIES = [
-  { key: "seed",   emoji: "🌱", label: "種", hint: "思いついたこと・アイデア" },
-  { key: "root",   emoji: "🌳", label: "根", hint: "方向性が固まった・調べた・整理した" },
+  { key: "seed",   emoji: "🌱", label: "種", hint: "アイデアの発生・収集", levelKey: "seedLevel" },
+  { key: "root",   emoji: "🌳", label: "根", hint: "調査・壁打ち・方向性の決定・整理", levelKey: "rootLevel" },
   { key: "branch", emoji: "🌿", label: "枝", hint: "制作や作業が進んだこと" },
   { key: "bloom",  emoji: "🌸", label: "咲", hint: "公開・完成・納品など、外に出たもの" },
+  { key: "soil",   emoji: "🟫", label: "土", hint: "家庭・健康・生活環境・経理など、片付いた・前進したこと" },
 ];
+
+const LEVELS = [
+  { value: "none", label: "なし" },
+  { value: "some", label: "あり" },
+  { value: "many", label: "多数" },
+];
+const LEVEL_LABEL = Object.fromEntries(LEVELS.map((l) => [l.value, l.label]));
+
+const ACTIVITY_DOMAINS = [
+  { key: "creative",    emoji: "🎨", label: "事業・創作",   short: "事業" },
+  { key: "employment",  emoji: "💻", label: "バイト・雇用", short: "バイト" },
+  { key: "household",   emoji: "🏠", label: "家庭・子育て", short: "家庭" },
+  { key: "obligations", emoji: "📋", label: "その他の義務", short: "その他" },
+  { key: "rest",        emoji: "🎮", label: "休養・娯楽",   short: "休養" },
+];
+const LOAD_LABELS = ["なし", "少なめ", "普通", "多め", "非常に多い"];
+
+const GOAL_TYPES = [
+  { value: "seed",   emoji: "🌱", label: "種" },
+  { value: "root",   emoji: "🌳", label: "根" },
+  { value: "branch", emoji: "🌿", label: "枝" },
+  { value: "bloom",  emoji: "🌸", label: "咲" },
+  { value: "soil",   emoji: "🟫", label: "土" },
+  { value: "rest",   emoji: "🎮", label: "休養" },
+];
+const GOAL_TYPE_LABEL = Object.fromEntries(GOAL_TYPES.map((t) => [t.value, t.label]));
+
+function emptyActivityLoad(){
+  return Object.fromEntries(ACTIVITY_DOMAINS.map((d) => [d.key, null]));
+}
+function validLoad(v){ return Number.isInteger(v) && v >= 0 && v <= 4 ? v : null; }
 
 const CHECKS = [
   { key: "mf",      emoji: "💰", label: "MF確認済み",             badge: "💰済" }, // source: future 'moneyforward-api' etc.
@@ -273,7 +360,11 @@ function createEmptyEntry(dateKey){
   const entry = {
     date: dateKey,
     todayGoal: "",
+    todayGoalType: null,
     memo: "",
+    seedLevel: null,
+    rootLevel: null,
+    activityLoad: emptyActivityLoad(),
     updatedAt: null,
   };
   for (const c of CATEGORIES) entry[c.key] = [];
@@ -290,7 +381,17 @@ function normalizeItem(item){
 // attachments and the MF check existed, so old saved entries keep working unchanged
 function normalizeEntry(raw, dateKey){
   const entry = { ...createEmptyEntry(dateKey), ...raw };
-  for (const c of CATEGORIES) entry[c.key] = (raw[c.key] || []).map(normalizeItem);
+  for (const c of CATEGORIES) {
+    // 土 didn't exist before; leave it absent on old entries so it reads as 未記録, not "nothing"
+    if (c.key === "soil" && !Array.isArray(raw.soil)) { delete entry.soil; continue; }
+    entry[c.key] = (raw[c.key] || []).map(normalizeItem);
+  }
+  for (const c of CATEGORIES) {
+    if (c.levelKey) entry[c.levelKey] = LEVEL_LABEL[raw[c.levelKey]] ? raw[c.levelKey] : null;
+  }
+  const load = raw.activityLoad && typeof raw.activityLoad === "object" ? raw.activityLoad : {};
+  entry.activityLoad = Object.fromEntries(ACTIVITY_DOMAINS.map((d) => [d.key, validLoad(load[d.key])]));
+  entry.todayGoalType = GOAL_TYPE_LABEL[raw.todayGoalType] ? raw.todayGoalType : null;
   for (const c of CHECKS) entry[c.key] = { ...createEmptyEntry(dateKey)[c.key], ...(raw[c.key] || {}) };
   // "memo" briefly shipped as a chip-list category before becoming a free-text field —
   // fold any already-added items into the text so nothing typed in that window is lost
@@ -333,8 +434,7 @@ const Store = {
     const all = this._readAll();
     entry.updatedAt = new Date().toISOString();
     all[entry.date] = entry;
-    this._writeAll(all);
-    return entry;
+    return this._writeAll(all); // false = not saved (a warning toast was already shown)
   },
   list(){
     return Object.values(this._readAll())
@@ -359,8 +459,9 @@ function getEntry(date){
   return entriesCache[date];
 }
 function persistEntry(date){
-  Store.save(getEntry(date));
+  return Store.save(getEntry(date));
 }
+function catItems(entry, key){ return entry[key] || []; }
 
 /* ---------- GitHub sync ----------
    The token lives only in this browser's localStorage — never in this file or any repo.
@@ -618,6 +719,7 @@ const state = {
   expandedDate: null,
   expandedMonth: null,  // "YYYY-MM" currently open in the "それ以前" section, or null
   selectedMonth: todayKey().slice(0, 7), // "YYYY-MM" chosen in the 月ごとに出力 card
+  summaryWeek: mondayOf(todayKey()),     // Monday of the week shown in the 週のまとめ card
 };
 
 /* ---------- month helpers ---------- */
@@ -649,17 +751,69 @@ function render(){
   app.innerHTML = state.view === "today" ? renderTodayView() : renderLogsView();
 }
 
+// 種・根の「＋詳細」を開いている欄（scope|date|cat）。再描画しても開いたままにする
+const openDetails = new Set();
+
 function renderCategoryBlock(scope, entry, cat){
-  const items = entry[cat.key] || [];
-  const inputId = `add-${scope}-${cat.key}-${entry.date}`;
-  const fileId = `${inputId}-file`;
-  return `
-    <div class="cat-block" data-cat="${cat.key}">
+  const label = `
       <div class="cat-label">
         <span>${cat.emoji} ${cat.label}</span>
         <span class="cat-hint">${esc(cat.hint)}</span>
-      </div>
+      </div>`;
+  if (!cat.levelKey) {
+    return `<div class="cat-block" data-cat="${cat.key}">${label}<div>${renderItemEditor(scope, entry, cat)}</div></div>`;
+  }
+  // 種・根：量（なし／あり／多数）が主入力。詳細（テキスト・写真）は任意なので折りたたむ
+  const level = entry[cat.levelKey];
+  const hasItems = catItems(entry, cat.key).length > 0;
+  const detailKey = `${scope}|${entry.date}|${cat.key}`;
+  const open = hasItems || openDetails.has(detailKey);
+  return `
+    <div class="cat-block" data-cat="${cat.key}">${label}
       <div>
+        <div class="seg" role="group" aria-label="${cat.label}の量">
+          ${LEVELS.map((l) => `<button type="button" class="seg-btn" data-action="set-level"
+            data-date="${entry.date}" data-field="${cat.levelKey}" data-value="${l.value}"
+            aria-pressed="${level === l.value}">${l.label}</button>`).join("")}
+          ${hasItems ? "" : `<button type="button" class="detail-toggle" data-action="toggle-detail"
+            data-key="${esc(detailKey)}" aria-expanded="${open}">${open ? "詳細を閉じる" : "＋詳細"}</button>`}
+        </div>
+        <div class="detail-area" ${open ? "" : "hidden"}>${renderItemEditor(scope, entry, cat)}</div>
+      </div>
+    </div>`;
+}
+
+function renderActivityRows(entry){
+  return ACTIVITY_DOMAINS.map((d) => {
+    const v = entry.activityLoad[d.key];
+    return `
+      <div class="load-row">
+        <span class="load-label">${d.emoji} ${esc(d.label)}</span>
+        <div class="load-btns" role="group" aria-label="${esc(d.label)}の活動量">
+          ${LOAD_LABELS.map((word, n) => `<button type="button" class="load-btn" data-action="set-load"
+            data-date="${entry.date}" data-domain="${d.key}" data-value="${n}" aria-pressed="${v === n}"
+            aria-label="${n}：${word}" title="${word}">${n}</button>`).join("")}
+        </div>
+      </div>`;
+  }).join("");
+}
+
+const LOAD_LEGEND = `<p class="load-legend">0 なし・1 少なめ・2 普通・3 多め・4 非常に多い（もう一度押すと取り消し）</p>`;
+
+function renderGoalTypeRow(entry){
+  return `
+    <div class="type-row" role="group" aria-label="着地点の分類">
+      <span class="type-label">分類（任意）</span>
+      ${GOAL_TYPES.map((t) => `<button type="button" class="type-btn" data-action="set-goal-type"
+        data-date="${entry.date}" data-value="${t.value}" aria-pressed="${entry.todayGoalType === t.value}">${t.emoji}${t.label}</button>`).join("")}
+    </div>`;
+}
+
+function renderItemEditor(scope, entry, cat){
+  const items = catItems(entry, cat.key);
+  const inputId = `add-${scope}-${cat.key}-${entry.date}`;
+  const fileId = `${inputId}-file`;
+  return `
         <ul class="chip-list">
           ${items.map((item, i) => `
             <li class="chip">
@@ -677,9 +831,7 @@ function renderCategoryBlock(scope, entry, cat){
           <button type="button" class="add-btn" data-action="add-item"
             data-scope="${scope}" data-date="${entry.date}" data-cat="${cat.key}" data-input="${inputId}" aria-label="追加">＋</button>
         </div>
-        <div class="pending-preview" id="pending-${inputId}"></div>
-      </div>
-    </div>`;
+        <div class="pending-preview" id="pending-${inputId}"></div>`;
 }
 
 function renderCheckRow(scope, entry, check){
@@ -711,8 +863,15 @@ function renderTodayView(){
 
     <section class="card">
       <h2 class="card-title">前日の記録</h2>
-      <p class="card-sub">思いついたこと・進んだこと・成果を、それぞれ短く追加します</p>
+      <p class="card-sub">種・根は量を選ぶだけでOK。枝・咲・土は短く追加します（全部埋めなくて大丈夫）</p>
       ${CATEGORIES.map((cat) => renderCategoryBlock("today", entry, cat)).join("")}
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">📊 昨日の活動量</h2>
+      <p class="card-sub">時間ではなく体感で。わからない領域は空けておけばOK</p>
+      ${LOAD_LEGEND}
+      ${renderActivityRows(entry)}
     </section>
 
     <section class="card">
@@ -720,15 +879,16 @@ function renderTodayView(){
     </section>
 
     <section class="card goal-card">
-      <h2 class="card-title">🌸 今日の咲候補</h2>
-      <p class="card-sub">今日これが終わればOK、という成果をひとつ</p>
-      <textarea rows="2" placeholder="例）〇〇のデザイン案を1本提出する"
+      <h2 class="card-title">🎯 今日の着地点</h2>
+      <p class="card-sub">今日ここまで進めば十分、という地点をひとつ</p>
+      <textarea rows="2" placeholder="例）Servicesページの骨組み完成"
         data-action="edit-goal" data-date="${entry.date}">${esc(entry.todayGoal)}</textarea>
+      ${renderGoalTypeRow(entry)}
     </section>
 
     <section class="card goal-card">
       <h2 class="card-title">📝 メモ</h2>
-      <p class="card-sub">種根枝咲に入らない、ふと考えたこと・やったこと</p>
+      <p class="card-sub">種根枝咲土に入らない、気づき・補足・出来事</p>
       <textarea rows="2" placeholder="例）電車の広告のコピーが気になった"
         data-action="edit-memo" data-date="${entry.date}">${esc(entry.memo)}</textarea>
     </section>
@@ -745,27 +905,50 @@ function renderTodayView(){
   `;
 }
 
+// 種・根は量（なし／あり／多数）があればそれを、無ければ従来どおり詳細の件数を出す。
+// 土を記録していない旧ログには土のバッジを出さない
+function renderMiniCounts(entry){
+  return CATEGORIES.map((c) => {
+    if (!entry[c.key]) return "";
+    const value = c.levelKey && entry[c.levelKey] ? LEVEL_LABEL[entry[c.levelKey]] : entry[c.key].length;
+    return `<span class="mini-count" data-cat="${c.key}">${c.emoji}${value}</span>`;
+  }).join("");
+}
+function refreshMiniCounts(date){
+  document.querySelectorAll(`.log-row[data-date="${date}"] .log-counts`).forEach((el) => {
+    const entry = getEntry(date);
+    el.innerHTML = renderMiniCounts(entry) + renderCheckBadges(entry);
+  });
+}
+function renderCheckBadges(entry){
+  return CHECKS.filter((c) => entry[c.key].checked).map((c) => `<span class="mini-check">${c.badge}</span>`).join("");
+}
+
 function renderLogRow(date){
   const entry = getEntry(date);
   const expanded = state.expandedDate === date;
-  const counts = CATEGORIES.map((c) => `<span class="mini-count" data-cat="${c.key}">${c.emoji}${entry[c.key].length}</span>`).join("");
-  const checkBadges = CHECKS.filter((c) => entry[c.key].checked).map((c) => `<span class="mini-check">${c.badge}</span>`).join("");
   const isToday = date === todayKey();
 
   return `
-    <div class="log-row ${expanded ? "expanded" : ""}">
+    <div class="log-row ${expanded ? "expanded" : ""}" data-date="${date}">
       <button type="button" class="log-row-head" data-action="toggle-log" data-date="${date}">
         <span class="log-date">${esc(formatJP(date))}${isToday ? '<span class="today-tag">今日</span>' : ""}</span>
-        <span class="log-counts">${counts}${checkBadges}</span>
+        <span class="log-counts">${renderMiniCounts(entry)}${renderCheckBadges(entry)}</span>
         <span class="log-caret">${expanded ? "▲" : "▼"}</span>
       </button>
       ${expanded ? `
         <div class="log-row-body">
           ${CATEGORIES.map((cat) => renderCategoryBlock(`log-${date}`, entry, cat)).join("")}
+          <div class="goal-edit">
+            <div class="cat-label"><span>📊 昨日の活動量</span></div>
+            ${LOAD_LEGEND}
+            ${renderActivityRows(entry)}
+          </div>
           ${CHECKS.map((c) => renderCheckRow(`log-${date}`, entry, c)).join("")}
           <div class="goal-edit">
-            <div class="cat-label"><span>🌸 今日の咲候補</span></div>
+            <div class="cat-label"><span>🎯 今日の着地点</span></div>
             <textarea rows="2" data-action="edit-goal" data-date="${date}">${esc(entry.todayGoal)}</textarea>
+            ${renderGoalTypeRow(entry)}
           </div>
           <div class="goal-edit">
             <div class="cat-label"><span>📝 メモ</span></div>
@@ -803,6 +986,8 @@ function renderLogsView(){
       <div class="date-badge">今週の記録</div>
       <div class="week-badge">🌸 今週 ${weekCount}件</div>
     </section>
+
+    ${renderWeekSummary(state.summaryWeek)}
 
     <div class="backup-row">
       <button type="button" class="backup-btn" data-action="export-backup">⬇ JSONで保存</button>
@@ -842,6 +1027,55 @@ function renderLogsView(){
   `;
 }
 
+// 週のまとめ（入力日ベース、週は月曜はじまり＝既存の「今週の咲」と同じ区切り）。
+// 種・根は「日数」、枝・咲・土は「件数」、活動量は「平均と記録日数」で、単位ごとに別表示して合算しない。
+// 未記録の日は0として数えない。
+function renderWeekSummary(monday){
+  const sunday = addDays(monday, 6);
+  const entries = Store.list().filter((e) => isInWeek(e.date, monday));
+  const isCurrent = monday >= mondayOf(todayKey());
+  const range = `${formatJP(monday).replace(/\(.\)/, "")}〜${formatJP(sunday).replace(/\(.\)/, "")}`;
+
+  const none = `<span class="sum-val none">未記録</span>`;
+  const levelCell = (c) => {
+    const recorded = entries.filter((e) => e[c.levelKey] !== null);
+    const active = recorded.filter((e) => e[c.levelKey] === "some" || e[c.levelKey] === "many").length;
+    const detailOnly = entries.filter((e) => e[c.levelKey] === null && catItems(e, c.key).length).length;
+    return `<div class="sum-cell"><span class="sum-label">${c.emoji} ${c.label}</span>
+      ${recorded.length ? `<span class="sum-val">${active}<small>日</small></span>` : none}
+      <span class="sum-note">あり・多数の日${recorded.length ? `／量の記録 ${recorded.length}日` : ""}${detailOnly ? `／詳細のみ ${detailOnly}日` : ""}</span></div>`;
+  };
+  const countCell = (c) => {
+    const withField = entries.filter((e) => Array.isArray(e[c.key]));
+    const total = withField.reduce((sum, e) => sum + e[c.key].length, 0);
+    return `<div class="sum-cell"><span class="sum-label">${c.emoji} ${c.label}</span>
+      ${withField.length ? `<span class="sum-val">${total}<small>件</small></span>` : none}
+      <span class="sum-note">記録項目数${withField.length ? `／${withField.length}日分` : ""}</span></div>`;
+  };
+  const bars = ACTIVITY_DOMAINS.map((d) => {
+    const values = entries.map((e) => e.activityLoad[d.key]).filter((v) => v !== null);
+    const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+    return `<div class="bar-row"><span>${d.emoji} ${esc(d.short)}</span>
+      <span class="bar-track">${avg === null ? "" : `<span class="bar-fill" style="display:block;width:${(avg / 4) * 100}%"></span>`}</span>
+      <span class="bar-val">${avg === null ? "未記録" : `平均${avg.toFixed(1)}（${values.length}日）`}</span></div>`;
+  }).join("");
+
+  return `
+    <section class="card week-summary">
+      <div class="week-nav">
+        <button type="button" class="week-nav-btn" data-action="week-prev" aria-label="前の週">‹</button>
+        <h2 class="card-title">📊 週のまとめ <span class="cat-hint">${esc(range)}</span></h2>
+        <button type="button" class="week-nav-btn" data-action="week-next" aria-label="次の週" ${isCurrent ? "disabled" : ""}>›</button>
+      </div>
+      <p class="card-sub">入力した日 ${entries.length}日／7日（入力日ベース）。日数・件数・活動量は別の単位です</p>
+      <div class="sum-grid">
+        ${CATEGORIES.map((c) => (c.levelKey ? levelCell(c) : countCell(c))).join("")}
+      </div>
+      <div class="sum-heading">昨日の活動量（体感 0〜4 の平均・実時間ではありません）</div>
+      ${bars}
+    </section>`;
+}
+
 // grouped by month so opening "過去ログ" never has to render hundreds of day rows at once —
 // only the recent 7 days plus whichever month(s) the user has actually opened
 function renderMonthGroup(monthKey, entries){
@@ -873,6 +1107,7 @@ function handleAddItem(scope, date, cat, inputId){
   const image = pendingImages.get(inputId) || null;
   if (!text && !image) { input.focus(); return; }
   const entry = getEntry(date);
+  if (!entry[cat]) entry[cat] = []; // e.g. 土 on an entry written before 土 existed
   const index = entry[cat].length;
   const item = { text, image };
   entry[cat].push(item);
@@ -916,12 +1151,7 @@ function patchAfterAdd(input, date, cat, index, item){
     document.querySelectorAll(".week-badge").forEach((el) => { el.textContent = label; });
   }
 
-  const miniCount = input.closest(".log-row")?.querySelector(`.mini-count[data-cat="${cat}"]`);
-  if (miniCount) {
-    const emoji = CATEGORIES.find((c) => c.key === cat).emoji;
-    const current = parseInt(miniCount.textContent.replace(/\D/g, ""), 10) || 0;
-    miniCount.textContent = `${emoji}${current + 1}`;
-  }
+  refreshMiniCounts(date);
 }
 
 async function handlePickImage(fileEl){
@@ -986,6 +1216,54 @@ function handleToggleCheck(date, field, checked){
   render();
 }
 
+// Selection buttons patch only their own group's aria-pressed instead of calling render(),
+// so text still being typed in another field (not yet added) isn't wiped out.
+function setPressed(btn, isOn){
+  btn.closest('[role="group"]').querySelectorAll("button[data-value]").forEach((b) => {
+    b.setAttribute("aria-pressed", String(isOn && b === btn));
+  });
+}
+
+// tapping the already-selected choice clears it back to 未記録 (null)
+function handleSetLevel(btn){
+  const entry = getEntry(btn.dataset.date);
+  const field = btn.dataset.field;
+  const value = entry[field] === btn.dataset.value ? null : btn.dataset.value;
+  entry[field] = value;
+  persistEntry(btn.dataset.date);
+  setPressed(btn, value !== null);
+  refreshMiniCounts(btn.dataset.date);
+}
+
+function handleSetLoad(btn){
+  const entry = getEntry(btn.dataset.date);
+  const n = Number(btn.dataset.value);
+  const value = entry.activityLoad[btn.dataset.domain] === n ? null : n;
+  entry.activityLoad[btn.dataset.domain] = value;
+  persistEntry(btn.dataset.date);
+  setPressed(btn, value !== null);
+}
+
+function handleSetGoalType(btn){
+  const entry = getEntry(btn.dataset.date);
+  const value = entry.todayGoalType === btn.dataset.value ? null : btn.dataset.value;
+  entry.todayGoalType = value;
+  persistEntry(btn.dataset.date);
+  setPressed(btn, value !== null);
+}
+
+function handleToggleDetail(btn){
+  const key = btn.dataset.key;
+  const area = btn.closest(".cat-block")?.querySelector(".detail-area");
+  if (!area) return;
+  const open = area.hidden;
+  area.hidden = !open;
+  if (open) openDetails.add(key); else openDetails.delete(key);
+  btn.setAttribute("aria-expanded", String(open));
+  btn.textContent = open ? "詳細を閉じる" : "＋詳細";
+  if (open) area.querySelector('input[type="text"]')?.focus();
+}
+
 function handleEditGoal(date, value){
   const entry = getEntry(date);
   entry.todayGoal = value;
@@ -1022,28 +1300,66 @@ function handleExportBackup(month){
   showToast(month ? `✓ ${formatMonthJP(month)}分をダウンロードしました` : "✓ バックアップをダウンロードしました");
 }
 
+// AI分析用のプレーンテキスト。未記録（null・欠損）と「なし」「0」「空欄」は必ず書き分ける
+function itemTexts(items){
+  return items.map((i) => i.text || "（写真のみ）");
+}
+function chatLevelLine(e, c){
+  const level = e[c.levelKey];
+  const items = itemTexts(catItems(e, c.key));
+  const head = level ? LEVEL_LABEL[level] : "未記録";
+  if (items.length) return `${c.emoji} ${c.label}：${head}（詳細：${items.join("／")}）`;
+  return `${c.emoji} ${c.label}：${head}${level && level !== "none" ? "（詳細なし）" : ""}`;
+}
+function chatListLine(e, c){
+  if (!Array.isArray(e[c.key])) return `${c.emoji} ${c.label}：未記録`; // 土が無かった頃のログ
+  const items = itemTexts(e[c.key]);
+  return `${c.emoji} ${c.label}：${items.length ? items.join("／") : "記録なし"}`;
+}
+function chatLoadLine(e){
+  const values = ACTIVITY_DOMAINS.map((d) => e.activityLoad[d.key]);
+  if (values.every((v) => v === null)) return "活動量（0〜4）：未記録";
+  return `活動量（0〜4）：${ACTIVITY_DOMAINS.map((d, i) => `${d.short}${values[i] === null ? "未記録" : values[i]}`).join("／")}`;
+}
+function buildChatEntry(e){
+  const prev = addDays(e.date, -1);
+  const lines = [`■ ${e.date} 入力（前日 ${prev} の活動記録）`];
+  for (const c of CATEGORIES) lines.push(c.levelKey ? chatLevelLine(e, c) : chatListLine(e, c));
+  lines.push(chatLoadLine(e));
+  for (const c of CHECKS) lines.push(`${c.label.replace(/済み$/, "")}：${e[c.key].checked ? "済" : "未チェック"}`);
+  const type = e.todayGoalType ? `（${GOAL_TYPE_LABEL[e.todayGoalType]}）` : "";
+  lines.push(`今日（${e.date}）の着地点${type}：${e.todayGoal.trim() ? e.todayGoal.trim() : "未記入"}`);
+  lines.push(`メモ：${e.memo.trim() ? e.memo.trim() : "未記入"}`);
+  return lines.join("\n");
+}
+
 function buildChatText(month){
-  let entries, title, request;
+  let entries, title, request, days;
   if (month) {
     entries = Store.list().filter(e => e.date.startsWith(`${month}-`)).reverse(); // oldest first
     title = formatMonthJP(month);
     request = "この月の記録を読んで、進んだこと・気になったことを具体的にコメントして。";
+    const [y, m] = month.split("-").map(Number);
+    const last = month === todayKey().slice(0, 7) ? Number(todayKey().slice(8)) : new Date(y, m, 0).getDate();
+    days = Array.from({ length: last }, (_, i) => `${month}-${pad2(i + 1)}`);
   } else {
     const cutoff = addDays(todayKey(), -13);
     entries = Store.list().filter(e => e.date >= cutoff && e.date <= todayKey());
     title = "直近14日";
     request = "最近の進捗を読んで、進んだこと・気になったことを具体的にコメントして。";
+    days = Array.from({ length: 14 }, (_, i) => addDays(cutoff, i));
   }
-  return `【SKSS Daily：${title}】\n${entries.length ? entries.map(e => {
-    const lines = [`■ ${e.date}`];
-    for (const c of CATEGORIES) {
-      const items = e[c.key].map(i => i.text).filter(Boolean);
-      if (items.length) lines.push(`${c.emoji}${c.label}：${items.join("／")}`);
-    }
-    if (e.todayGoal) lines.push(`今日の咲候補：${e.todayGoal}`);
-    if (e.memo) lines.push(`メモ：${e.memo}`);
-    return lines.join("\n");
-  }).join("\n\n") : "記録はまだありません"}\n\n${request}記録がない日は停滞と決めつけず、必要なら私に聞いてください。会話しながら訂正します。`;
+  const have = new Set(entries.map((e) => e.date));
+  const missing = days.filter((d) => !have.has(d));
+  const legend = "※日付は入力日。種〜活動量はその前日の活動、着地点はその日の目標です。"
+    + "種・根は量（なし／あり／多数）＋任意の詳細。活動量は主観の5段階（0なし・1少なめ・2普通・3多め・4非常に多い）で、実時間ではありません。"
+    + "「未記録」は入力されていない状態で、「なし」「0」とは区別しています。";
+  const analysis = "内容と活動量をあわせて見て、制作が進まない理由が家庭・雇用業務・休養・方向性検討のどれに関わっていそうか、"
+    + "種・根に偏って枝・咲へ移れていない傾向はないか、制作や成果・生活基盤の整備が続いているかにも触れてください。"
+    + "記録は主観なので、因果関係や実稼働時間は断定しないでください。";
+  return `【SKSS Daily：${title}】\n${legend}\n\n${entries.length ? entries.map(buildChatEntry).join("\n\n") : "記録はまだありません"}`
+    + `${entries.length && missing.length ? `\n\n入力のない日：${missing.join("、")}` : ""}`
+    + `\n\n${request}${analysis}記録がない日は停滞と決めつけず、必要なら私に聞いてください。会話しながら訂正します。`;
 }
 
 async function handleCopyChat(month){
@@ -1101,19 +1417,23 @@ function buildPrintableHtml(month){
   const heading = month ? `${formatMonthJP(month)}の記録` : "バックアップ";
   const rows = entries.map((e) => {
     const catsHtml = CATEGORIES.map((c) => {
-      const items = e[c.key] || [];
+      const items = catItems(e, c.key);
+      const level = c.levelKey ? `<span class="lv">［${e[c.levelKey] ? LEVEL_LABEL[e[c.levelKey]] : "未記録"}］</span>` : "";
       const body = items.length
         ? `<ul>${items.map((i) => `<li>${esc(i.text)}${i.image ? ` <img class="pv-thumb" src="${i.image}" alt="">` : ""}</li>`).join("")}</ul>`
-        : `<p class="empty">(なし)</p>`;
-      return `<div class="cat"><h3>${c.emoji} ${esc(c.label)}</h3>${body}</div>`;
+        : (c.levelKey ? "" : `<p class="empty">${e[c.key] ? "(なし)" : "(未記録)"}</p>`);
+      return `<div class="cat"><h3>${c.emoji} ${esc(c.label)}${level}</h3>${body}</div>`;
     }).join("");
+    const loadHtml = ACTIVITY_DOMAINS.map((d) => `${d.emoji}${esc(d.short)} ${e.activityLoad[d.key] === null ? "−" : e.activityLoad[d.key]}`).join("　");
     const checksHtml = CHECKS.map((c) => `<span>${c.emoji} ${esc(c.label)}：${e[c.key].checked ? "✓" : "−"}</span>`).join("　");
+    const goalType = e.todayGoalType ? `（${GOAL_TYPE_LABEL[e.todayGoalType]}）` : "";
     return `
       <section class="entry">
         <h2>${esc(formatJP(e.date))}</h2>
         ${catsHtml}
+        <p class="checks">📊 活動量（0〜4・−は未記録）：${loadHtml}</p>
         <p class="checks">${checksHtml}</p>
-        <p class="goal"><strong>🌸 今日の咲候補：</strong>${e.todayGoal ? esc(e.todayGoal) : "(未設定)"}</p>
+        <p class="goal"><strong>🎯 今日の着地点${goalType}：</strong>${e.todayGoal ? esc(e.todayGoal) : "(未設定)"}</p>
         ${e.memo ? `<p class="goal"><strong>📝 メモ：</strong>${esc(e.memo)}</p>` : ""}
       </section>`;
   }).join("");
@@ -1132,6 +1452,7 @@ function buildPrintableHtml(month){
   .cat h3{font-size:12.5px;color:#3f6a44;margin-bottom:2px;font-weight:700;}
   .cat ul{margin:0 0 0 20px;padding:0;font-size:13px;}
   .cat .empty{margin:0 0 0 2px;font-size:12.5px;color:#999;}
+  .cat .lv{font-weight:400;color:#555;margin-left:4px;}
   .checks{font-size:12.5px;color:#555;margin:10px 0 4px;}
   .goal{font-size:13px;}
   .pv-thumb{width:22px;height:22px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-left:4px;}
@@ -1186,11 +1507,23 @@ app.addEventListener("click", (e) => {
     handleAddItem(el.dataset.scope, el.dataset.date, el.dataset.cat, el.dataset.input);
   } else if (action === "remove-item") {
     handleRemoveItem(el.dataset.date, el.dataset.cat, Number(el.dataset.index));
+  } else if (action === "set-level") {
+    handleSetLevel(el);
+  } else if (action === "set-load") {
+    handleSetLoad(el);
+  } else if (action === "set-goal-type") {
+    handleSetGoalType(el);
+  } else if (action === "toggle-detail") {
+    handleToggleDetail(el);
+  } else if (action === "week-prev" || action === "week-next") {
+    state.summaryWeek = addDays(state.summaryWeek, action === "week-prev" ? -7 : 7);
+    render();
   } else if (action === "save") {
-    persistEntry(todayKey());
+    // if this device couldn't store it, a warning toast is already up — don't cover it with "saved"
+    if (!persistEntry(todayKey())) return;
     if (Sync.connected()) Sync.save(); else showToast("✓ 保存しました");
   } else if (action === "save-log") {
-    persistEntry(el.dataset.date);
+    if (!persistEntry(el.dataset.date)) return; // keep the row open so nothing typed is lost
     state.expandedDate = null;
     if (!Sync.connected()) showToast("✓ 保存しました");
     render();
