@@ -305,20 +305,25 @@ const STORAGE_KEY = "skssDaily.v1.entries";
 
 /* ---------- data model (see SPEC.md in this folder) ----------
    Each entry is keyed by the INPUT date (the morning it was written).
-   seed/root/branch/bloom/soil, seedLevel/rootLevel and activityLoad describe the PREVIOUS
+   seedRoot/branch/bloom/soil, seedRootLevel and activityLoad describe the PREVIOUS
    day's activity; todayGoal / todayGoalTypes are the goal for the input date itself.
-     seed, root, branch, bloom, soil : [{ text, image }]   (soil is absent on pre-v1.0-spec entries = 未記録)
-     seedLevel, rootLevel           : null(未記録) | "none" | "some" | "many"
+     seedRoot, branch, bloom, soil  : [{ text, image }]   (soil is absent on pre-v1.0-spec entries = 未記録)
+     seedRootLevel                  : null(未記録) | "none" | "some" | "many"   (種・根をまとめた量, SPEC 1.2〜)
+     seed, root / seedLevel, rootLevel : 種・根を別々に記録していた頃のデータ。消さず・統合せず、
+                                      データがある日だけ「以前の形式」として表示・出力する
      activityLoad                   : { creative, employment, household, obligations, rest } each null | 0..4
      todayGoal                      : string  (shown as 「今日の着地点」; was 「今日の咲候補」)
-     todayGoalTypes                 : [] | subset of ["seed","root","branch","bloom","soil","rest"] (multi-select, [] = 未選択)
+     todayGoalTypes                 : [] | subset of ["seedRoot","branch","bloom","soil","rest"] (multi-select, [] = 未選択;
+                                      "seed"/"root" may remain on older entries and are still shown)
                                       (the single-value `todayGoalType` of the first v1.0 build is read in and then dropped)
    null / missing always means 未記録 — never treat it as なし or 0. */
 
 /* ---------- categories ---------- */
 const CATEGORIES = [
-  { key: "seed",   emoji: "🌱", label: "種", hint: "アイデアの発生・収集", levelKey: "seedLevel" },
-  { key: "root",   emoji: "🌳", label: "根", hint: "調査・壁打ち・方向性の決定・整理", levelKey: "rootLevel" },
+  { key: "seedRoot", emoji: "🌱🌳", label: "種・根", hint: "アイデア・調査・壁打ち・方向性の決定・整理", levelKey: "seedRootLevel" },
+  // 種・根を別々に記録していた頃の項目。データがある日だけ表示する（legacy）
+  { key: "seed",   emoji: "🌱", label: "種", hint: "以前の形式で記録した分", levelKey: "seedLevel", legacy: true },
+  { key: "root",   emoji: "🌳", label: "根", hint: "以前の形式で記録した分", levelKey: "rootLevel", legacy: true },
   { key: "branch", emoji: "🌿", label: "枝", hint: "制作や作業が進んだこと" },
   { key: "bloom",  emoji: "🌸", label: "咲", hint: "公開・完成・納品など、外に出たもの" },
   { key: "soil",   emoji: "🟫", label: "土", hint: "家庭・健康・生活環境・経理など、片付いた・前進したこと" },
@@ -341,14 +346,30 @@ const ACTIVITY_DOMAINS = [
 const LOAD_LABELS = ["なし", "少なめ", "普通", "多め", "非常に多い"];
 
 const GOAL_TYPES = [
-  { value: "seed",   emoji: "🌱", label: "種" },
-  { value: "root",   emoji: "🌳", label: "根" },
+  { value: "seedRoot", emoji: "🌱🌳", label: "種・根" },
+  { value: "seed",   emoji: "🌱", label: "種", legacy: true }, // 旧版で選べた分類。選ばれている日だけボタンを出す
+  { value: "root",   emoji: "🌳", label: "根", legacy: true },
   { value: "branch", emoji: "🌿", label: "枝" },
   { value: "bloom",  emoji: "🌸", label: "咲" },
   { value: "soil",   emoji: "🟫", label: "土" },
   { value: "rest",   emoji: "🎮", label: "休養" },
 ];
 const GOAL_TYPE_LABEL = Object.fromEntries(GOAL_TYPES.map((t) => [t.value, t.label]));
+
+// 種・根を別々に記録していた頃のデータがあるか／まとめた「種・根」に記録があるか
+function hasLegacySeedRoot(e){
+  return !!(e.seedLevel || e.rootLevel || catItems(e, "seed").length || catItems(e, "root").length);
+}
+function hasSeedRoot(e){ return !!(e.seedRootLevel || catItems(e, "seedRoot").length); }
+// "edit": 入力画面。種・根は常に出し、以前の形式はデータがある日だけ出す
+// "report": 出力・一覧。以前の形式だけの日に空の「種・根：未記録」を足さない
+function categoriesFor(e, mode){
+  return CATEGORIES.filter((c) => {
+    if (c.legacy) return hasLegacySeedRoot(e);
+    if (c.key === "seedRoot" && mode === "report") return hasSeedRoot(e) || !hasLegacySeedRoot(e);
+    return true;
+  });
+}
 
 function emptyActivityLoad(){
   return Object.fromEntries(ACTIVITY_DOMAINS.map((d) => [d.key, null]));
@@ -366,6 +387,7 @@ function createEmptyEntry(dateKey){
     todayGoal: "",
     todayGoalTypes: [],
     memo: "",
+    seedRootLevel: null,
     seedLevel: null,
     rootLevel: null,
     activityLoad: emptyActivityLoad(),
@@ -812,7 +834,7 @@ function renderGoalTypeRow(entry){
   return `
     <div class="type-row" role="group" aria-label="着地点の分類">
       <span class="type-label">分類（任意・複数可）</span>
-      ${GOAL_TYPES.map((t) => `<button type="button" class="type-btn" data-action="set-goal-type"
+      ${GOAL_TYPES.filter((t) => !t.legacy || entry.todayGoalTypes.includes(t.value)).map((t) => `<button type="button" class="type-btn" data-action="set-goal-type"
         data-date="${entry.date}" data-value="${t.value}" aria-pressed="${entry.todayGoalTypes.includes(t.value)}">${t.emoji}${t.label}</button>`).join("")}
     </div>`;
 }
@@ -873,7 +895,7 @@ function renderTodayView(){
     <section class="card">
       <h2 class="card-title">前日の記録</h2>
       <p class="card-sub">種・根は量を選ぶだけでOK。枝・咲・土は短く追加します（全部埋めなくて大丈夫）</p>
-      ${CATEGORIES.map((cat) => renderCategoryBlock("today", entry, cat)).join("")}
+      ${categoriesFor(entry, "edit").map((cat) => renderCategoryBlock("today", entry, cat)).join("")}
     </section>
 
     <section class="card">
@@ -917,7 +939,7 @@ function renderTodayView(){
 // 種・根は量（なし／あり／多数）があればそれを、無ければ従来どおり詳細の件数を出す。
 // 土を記録していない旧ログには土のバッジを出さない
 function renderMiniCounts(entry){
-  return CATEGORIES.map((c) => {
+  return categoriesFor(entry, "report").map((c) => {
     if (!entry[c.key]) return "";
     const value = c.levelKey && entry[c.levelKey] ? LEVEL_LABEL[entry[c.levelKey]] : entry[c.key].length;
     return `<span class="mini-count" data-cat="${c.key}">${c.emoji}${value}</span>`;
@@ -947,7 +969,7 @@ function renderLogRow(date){
       </button>
       ${expanded ? `
         <div class="log-row-body">
-          ${CATEGORIES.map((cat) => renderCategoryBlock(`log-${date}`, entry, cat)).join("")}
+          ${categoriesFor(entry, "edit").map((cat) => renderCategoryBlock(`log-${date}`, entry, cat)).join("")}
           <div class="goal-edit">
             <div class="cat-label"><span>📊 昨日の活動量</span></div>
             ${LOAD_LEGEND}
@@ -1078,7 +1100,8 @@ function renderWeekSummary(monday){
       </div>
       <p class="card-sub">入力した日 ${entries.length}日／7日（入力日ベース）。日数・件数・活動量は別の単位です</p>
       <div class="sum-grid">
-        ${CATEGORIES.map((c) => (c.levelKey ? levelCell(c) : countCell(c))).join("")}
+        ${CATEGORIES.filter((c) => !c.legacy || entries.some(hasLegacySeedRoot))
+          .map((c) => (c.levelKey ? levelCell(c) : countCell(c))).join("")}
       </div>
       <div class="sum-heading">昨日の活動量（体感 0〜4 の平均・実時間ではありません）</div>
       ${bars}
@@ -1338,7 +1361,7 @@ function goalTypesText(e){
 function buildChatEntry(e){
   const prev = addDays(e.date, -1);
   const lines = [`■ ${e.date} 入力（前日 ${prev} の活動記録）`];
-  for (const c of CATEGORIES) lines.push(c.levelKey ? chatLevelLine(e, c) : chatListLine(e, c));
+  for (const c of categoriesFor(e, "report")) lines.push(c.levelKey ? chatLevelLine(e, c) : chatListLine(e, c));
   lines.push(chatLoadLine(e));
   for (const c of CHECKS) lines.push(`${c.label.replace(/済み$/, "")}：${e[c.key].checked ? "済" : "未チェック"}`);
   const type = goalTypesText(e);
@@ -1366,7 +1389,7 @@ function buildChatText(month){
   const have = new Set(entries.map((e) => e.date));
   const missing = days.filter((d) => !have.has(d));
   const legend = "※日付は入力日。種〜活動量はその前日の活動、着地点はその日の目標です。"
-    + "種・根は量（なし／あり／多数）＋任意の詳細。活動量は主観の5段階（0なし・1少なめ・2普通・3多め・4非常に多い）で、実時間ではありません。"
+    + "種・根は量（なし／あり／多数）＋任意の詳細で、以前の日は種と根を別々に記録しています。活動量は主観の5段階（0なし・1少なめ・2普通・3多め・4非常に多い）で、実時間ではありません。"
     + "「未記録」は入力されていない状態で、「なし」「0」とは区別しています。";
   const analysis = "内容と活動量をあわせて見て、制作が進まない理由が家庭・雇用業務・休養・方向性検討のどれに関わっていそうか、"
     + "種・根に偏って枝・咲へ移れていない傾向はないか、制作や成果・生活基盤の整備が続いているかにも触れてください。"
@@ -1430,7 +1453,7 @@ function buildPrintableHtml(month){
     : Store.list();
   const heading = month ? `${formatMonthJP(month)}の記録` : "バックアップ";
   const rows = entries.map((e) => {
-    const catsHtml = CATEGORIES.map((c) => {
+    const catsHtml = categoriesFor(e, "report").map((c) => {
       const items = catItems(e, c.key);
       const level = c.levelKey ? `<span class="lv">［${e[c.levelKey] ? LEVEL_LABEL[e[c.levelKey]] : "未記録"}］</span>` : "";
       const body = items.length
